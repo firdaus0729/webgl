@@ -1,4 +1,4 @@
-import { Scene, Vector3, Mesh, StandardMaterial, Color3, UniversalCamera } from '@babylonjs/core';
+import { Scene, Vector3, Mesh, StandardMaterial, Color3 } from '@babylonjs/core';
 import { Health } from './health';
 import { Weapon } from './weapon';
 import type { IDamageable } from './weapon';
@@ -8,9 +8,7 @@ export class Bot implements IDamageable {
   public mesh: Mesh;
   public health: Health;
   public weapon: Weapon;
-  private scene: Scene;
   private headCollider: Mesh;
-  private target: Vector3 | null = null;
   private lastShotTime: number = 0;
   private reactionDelay: number;
   private strafeDirection: number = 1;
@@ -18,7 +16,6 @@ export class Bot implements IDamageable {
   private state: 'idle' | 'chasing' | 'attacking' = 'idle';
 
   constructor(scene: Scene, spawnPoint: Vector3, weapon: Weapon) {
-    this.scene = scene;
     this.weapon = weapon;
     this.reactionDelay = GAME_CONSTANTS.BOT_REACTION_DELAY;
 

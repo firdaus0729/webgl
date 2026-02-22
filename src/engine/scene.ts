@@ -1,4 +1,4 @@
-import { Engine, Scene, UniversalCamera, HemisphericLight, Vector3, Mesh, Color3, Color4, StandardMaterial, DirectionalLight } from '@babylonjs/core';
+import { Engine, Scene, UniversalCamera, HemisphericLight, Vector3, Mesh, Color3, Color4, StandardMaterial, DirectionalLight, BaseTexture } from '@babylonjs/core';
 import { GAME_CONSTANTS } from './constants';
 
 // Prevent duplicate logging in React StrictMode
@@ -8,10 +8,10 @@ export class GameScene {
   public engine: Engine;
   public scene: Scene;
   public camera: UniversalCamera;
-  public ground: Mesh;
-  public platform: Mesh;
-  public cover1: Mesh;
-  public cover2: Mesh;
+  public ground!: Mesh;
+  public platform!: Mesh;
+  public cover1!: Mesh;
+  public cover2!: Mesh;
   public playerSpawn: Vector3;
   public botSpawn: Vector3;
 
@@ -60,7 +60,7 @@ export class GameScene {
     
     // Enable image-based lighting for softer, more natural look
     this.scene.environmentIntensity = 0.7;
-    this.scene.environmentBRDFTexture = null; // Will use default
+    (this.scene as { environmentBRDFTexture: BaseTexture | null }).environmentBRDFTexture = null; // Will use default
 
     // Calculate spawn points first
     const { ARENA_SIZE } = GAME_CONSTANTS;

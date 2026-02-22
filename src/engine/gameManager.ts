@@ -154,7 +154,7 @@ export class GameManager {
           this.playerShotsFired++;
           this.stats.shotsFired++;
           const forward = this.player.getForwardVector();
-          const hit = this.playerWeapon.fire(
+          void this.playerWeapon.fire(
             this.player.getPosition(),
             forward,
             this.bot,
@@ -181,7 +181,7 @@ export class GameManager {
           if (distance <= GAME_CONSTANTS.BOT_CHASE_DISTANCE) {
             this.botShotsFired++;
             const direction = this.bot.getShootDirection(this.player.getPosition());
-            const hit = this.botWeapon.fire(
+            void this.botWeapon.fire(
               this.bot.getPosition(),
               direction,
               this.player,
@@ -238,7 +238,7 @@ export class GameManager {
     this.notifyStateChange();
   }
 
-  private endMatch(winner: 'player' | 'bot' | 'tie'): void {
+  private endMatch(_winner: 'player' | 'bot' | 'tie'): void {
     this.state = 'matchEnded';
     this.player.setCanControl(false);
     this.updateStats();

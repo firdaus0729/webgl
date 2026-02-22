@@ -29,7 +29,7 @@ export class Health implements IHealth {
     return this.maxHealth;
   }
 
-  public takeDamage(amount: number, isHeadshot: boolean = false): void {
+  public takeDamage(amount: number, _isHeadshot: boolean = false): void {
     if (this.health <= 0) return;
 
     this.health = Math.max(0, this.health - amount);
