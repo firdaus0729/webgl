@@ -11,6 +11,7 @@ export const GAME_CONSTANTS = {
   HEADSHOT_DAMAGE: 25,
   MELEE_RANGE: 2.2,
   MELEE_ATTACK_INTERVAL: 0.5, // seconds between punches/kicks
+  FIRE_INTERVAL: 0.2, // seconds (for legacy weapon.ts if present)
   
   // Health
   MAX_HEALTH: 100,
