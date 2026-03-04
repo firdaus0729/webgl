@@ -1,8 +1,9 @@
+import { Vector3 } from '@babylonjs/core';
 import { GameScene } from './scene';
 import { InputManager } from './input';
 import { Player } from './player';
 import { Bot } from './bot';
-import { Weapon } from './weapon';
+import { Melee } from './melee';
 import { GAME_CONSTANTS } from './constants';
 
 export type GameState = 'waiting' | 'playing' | 'respawning' | 'matchEnded' | 'paused';
@@ -10,11 +11,8 @@ export type GameState = 'waiting' | 'playing' | 'respawning' | 'matchEnded' | 'p
 export interface GameStats {
   playerKills: number;
   botKills: number;
-  shotsFired: number;
-  shotsHit: number;
-  headshots: number;
-  playerAccuracy: number;
-  botAccuracy: number;
+  strikesHit: number;
+  criticals: number;
   averageLifeDuration: number;
 }
 
@@ -23,8 +21,8 @@ export class GameManager {
   private input: InputManager;
   private player: Player;
   private bot: Bot;
-  private playerWeapon: Weapon;
-  private botWeapon: Weapon;
+  private playerMelee: Melee;
+  private botMelee: Melee;
   private state: GameState = 'waiting'; // Start in waiting state until user clicks start
   private matchStartTime: number = 0;
   private matchTimeRemaining: number = GAME_CONSTANTS.MATCH_TIME_LIMIT;
@@ -33,25 +31,17 @@ export class GameManager {
   private respawnTimer: number = 0;
   private respawningEntity: 'player' | 'bot' | null = null;
 
-  // Internal metrics
   private stats: GameStats = {
     playerKills: 0,
     botKills: 0,
-    shotsFired: 0,
-    shotsHit: 0,
-    headshots: 0,
-    playerAccuracy: 0,
-    botAccuracy: 0,
+    strikesHit: 0,
+    criticals: 0,
     averageLifeDuration: 0,
   };
 
   private lifeStartTime: number = 0;
-  private gameStartTime: number = 0; // Track when game actually started (for grace period)
+  private gameStartTime: number = 0;
   private lifeDurations: number[] = [];
-  private playerShotsFired: number = 0;
-  private playerShotsHit: number = 0;
-  private botShotsFired: number = 0;
-  private botShotsHit: number = 0;
 
   // Callbacks
   private stateChangeCallbacks: ((state: GameState) => void)[] = [];
@@ -61,11 +51,11 @@ export class GameManager {
   constructor(canvas: HTMLCanvasElement) {
     this.scene = new GameScene(canvas);
     this.input = new InputManager(canvas);
-    this.playerWeapon = new Weapon(this.scene.scene);
-    this.botWeapon = new Weapon(this.scene.scene);
+    this.playerMelee = new Melee(this.scene.scene);
+    this.botMelee = new Melee(this.scene.scene);
 
-    this.player = new Player(this.scene.camera, this.input, this.playerWeapon);
-    this.bot = new Bot(this.scene.scene, this.scene.botSpawn, this.botWeapon);
+    this.player = new Player(this.scene.camera, this.input, this.playerMelee);
+    this.bot = new Bot(this.scene.scene, this.scene.botSpawn, this.botMelee);
 
     // Setup player health callbacks
     this.player.health.onDeath(() => {
@@ -149,45 +139,39 @@ export class GameManager {
         this.player.update(deltaTime);
         this.bot.update(deltaTime, this.player.getPosition());
 
-        // Handle player shooting
-        if (this.input.isMouseButtonPressed(0) && this.playerWeapon.canFire()) {
-          this.playerShotsFired++;
-          this.stats.shotsFired++;
+        // Player melee (punch/kick) - left click
+        if (this.input.isMouseButtonPressed(0) && this.playerMelee.canAttack()) {
           const forward = this.player.getForwardVector();
-          void this.playerWeapon.fire(
+          this.playerMelee.attack(
             this.player.getPosition(),
             forward,
             this.bot,
             (isHeadshot) => {
-              if (isHeadshot) {
-                this.stats.headshots++;
-              }
-              this.playerShotsHit++;
-              this.stats.shotsHit++;
+              if (isHeadshot) this.stats.criticals++;
+              this.stats.strikesHit++;
               this.notifyHit();
             }
           );
         }
 
-        // Handle bot shooting - add grace period of 2 seconds after game starts
+        // Bot melee - grace period then attack when in range
         const timeSinceStart = (now - this.gameStartTime) / 1000;
-        const gracePeriod = 2; // 2 seconds grace period
-        
-        if (this.botWeapon.canFire() && 
-            !this.bot.health.isDead() && 
-            !this.player.health.isDead() &&
-            timeSinceStart >= gracePeriod) { // Don't shoot during grace period
-          const distance = this.bot.getPosition().subtract(this.player.getPosition()).length();
-          if (distance <= GAME_CONSTANTS.BOT_CHASE_DISTANCE) {
-            this.botShotsFired++;
-            const direction = this.bot.getShootDirection(this.player.getPosition());
-            void this.botWeapon.fire(
+        const gracePeriod = 2;
+        if (
+          this.botMelee.canAttack() &&
+          !this.bot.health.isDead() &&
+          !this.player.health.isDead() &&
+          timeSinceStart >= gracePeriod &&
+          Math.random() < GAME_CONSTANTS.BOT_ATTACK_CHANCE
+        ) {
+          const distance = Vector3.Distance(this.bot.getPosition(), this.player.getPosition());
+          if (distance <= GAME_CONSTANTS.BOT_MELEE_RANGE) {
+            const direction = this.bot.getAttackDirection(this.player.getPosition());
+            this.botMelee.attack(
               this.bot.getPosition(),
               direction,
               this.player,
-              () => {
-                this.botShotsHit++;
-              }
+              () => {}
             );
           }
         }
@@ -252,14 +236,6 @@ export class GameManager {
   }
 
   private updateStats(): void {
-    this.stats.playerAccuracy = this.playerShotsFired > 0 
-      ? (this.playerShotsHit / this.playerShotsFired) * 100 
-      : 0;
-    
-    this.stats.botAccuracy = this.botShotsFired > 0 
-      ? (this.botShotsHit / this.botShotsFired) * 100 
-      : 0;
-
     if (this.lifeDurations.length > 0) {
       const sum = this.lifeDurations.reduce((a, b) => a + b, 0);
       this.stats.averageLifeDuration = sum / this.lifeDurations.length;
@@ -355,24 +331,16 @@ export class GameManager {
     this.respawnTimer = 0;
     this.respawningEntity = null;
 
-    // Reset stats
     this.stats = {
       playerKills: 0,
       botKills: 0,
-      shotsFired: 0,
-      shotsHit: 0,
-      headshots: 0,
-      playerAccuracy: 0,
-      botAccuracy: 0,
+      strikesHit: 0,
+      criticals: 0,
       averageLifeDuration: 0,
     };
 
     this.lifeStartTime = Date.now();
     this.lifeDurations = [];
-    this.playerShotsFired = 0;
-    this.playerShotsHit = 0;
-    this.botShotsFired = 0;
-    this.botShotsHit = 0;
 
     // Respawn entities
     this.player.respawn(this.scene.playerSpawn);

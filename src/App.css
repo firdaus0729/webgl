@@ -21,6 +21,18 @@ body {
   cursor: none;
 }
 
+.app-3d-link {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  color: #888;
+  font-size: 0.85rem;
+  z-index: 3000;
+}
+.app-3d-link:hover {
+  color: #eee;
+}
+
 .app-error {
   display: flex;
   align-items: center;
@@ -51,29 +63,4 @@ body {
   font-size: 0.9rem;
   opacity: 0.8;
   margin-top: 1rem;
-}
-
-/* Online/offline status — only visible when offline so the user knows the app still works */
-.connection-status {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  padding: 0.4rem 0.75rem;
-  font-size: 0.8rem;
-  text-align: center;
-  z-index: 1000;
-  pointer-events: none;
-  transition: opacity 0.2s ease, background 0.2s ease;
-}
-
-.connection-status.online {
-  opacity: 0;
-  background: transparent;
-}
-
-.connection-status.offline {
-  opacity: 1;
-  background: rgba(0, 0, 0, 0.75);
-  color: #ffc107;
 }

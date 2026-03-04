@@ -19,6 +19,16 @@
   font-family: 'Arial', sans-serif;
 }
 
+.start-logo {
+  display: block;
+  max-width: 280px;
+  max-height: 140px;
+  width: auto;
+  height: auto;
+  margin: 0 auto 24px;
+  object-fit: contain;
+}
+
 .start-title {
   font-size: 64px;
   margin-bottom: 30px;

@@ -1,23 +1,20 @@
 import { Scene, Vector3, Mesh, StandardMaterial, Color3 } from '@babylonjs/core';
 import { Health } from './health';
-import { Weapon } from './weapon';
-import type { IDamageable } from './weapon';
+import { Melee } from './melee';
+import type { IDamageable } from './melee';
 import { GAME_CONSTANTS } from './constants';
 
 export class Bot implements IDamageable {
   public mesh: Mesh;
   public health: Health;
-  public weapon: Weapon;
+  public melee: Melee;
   private headCollider: Mesh;
-  private lastShotTime: number = 0;
-  private reactionDelay: number;
   private strafeDirection: number = 1;
   private strafeChangeTime: number = 0;
   private state: 'idle' | 'chasing' | 'attacking' = 'idle';
 
-  constructor(scene: Scene, spawnPoint: Vector3, weapon: Weapon) {
-    this.weapon = weapon;
-    this.reactionDelay = GAME_CONSTANTS.BOT_REACTION_DELAY;
+  constructor(scene: Scene, spawnPoint: Vector3, melee: Melee) {
+    this.melee = melee;
 
     // Create bot mesh - make it taller and VERY visible
     this.mesh = Mesh.CreateBox('bot', 1, scene);
@@ -74,8 +71,7 @@ export class Bot implements IDamageable {
 
     const distanceToPlayer = Vector3.Distance(this.mesh.position, playerPosition);
 
-    // Determine state
-    if (distanceToPlayer <= GAME_CONSTANTS.BOT_CHASE_DISTANCE) {
+    if (distanceToPlayer <= GAME_CONSTANTS.BOT_MELEE_RANGE) {
       this.state = 'attacking';
     } else {
       this.state = 'chasing';
@@ -128,49 +124,12 @@ export class Bot implements IDamageable {
     const strafeVector = new Vector3(-direction.z, 0, direction.x).normalize().scale(strafeAmount * deltaTime);
     this.mesh.moveWithCollisions(strafeVector);
 
-    // Face player
     this.faceTarget(playerPosition);
-
-    // Shoot at player
-    const nowTime = Date.now();
-    if (nowTime - this.lastShotTime >= this.reactionDelay) {
-      this.shootAtPlayer(playerPosition);
-      this.lastShotTime = nowTime;
-    }
   }
 
-  private shootAtPlayer(playerPosition: Vector3): void {
-    if (!this.weapon.canFire()) return;
-
-    // Calculate direction to player
-    const direction = playerPosition.subtract(this.mesh.position);
-    direction.normalize();
-
-    // Add accuracy offset
-    if (Math.random() > GAME_CONSTANTS.BOT_ACCURACY) {
-      const offsetAngle = (Math.random() - 0.5) * 0.3; // Random offset up to ~17 degrees
-      const offsetAxis = new Vector3(-direction.z, 0, direction.x).normalize();
-      direction.addInPlace(offsetAxis.scale(Math.sin(offsetAngle)));
-      direction.normalize();
-    }
-
-    // Fire weapon (bot fires at player, handled by GameManager)
-    // The weapon.fire will be called by GameManager with player as target
-  }
-
-  public getShootDirection(playerPosition: Vector3): Vector3 {
-    const direction = playerPosition.subtract(this.mesh.position);
-    direction.normalize();
-
-    // Add accuracy offset
-    if (Math.random() > GAME_CONSTANTS.BOT_ACCURACY) {
-      const offsetAngle = (Math.random() - 0.5) * 0.3;
-      const offsetAxis = new Vector3(-direction.z, 0, direction.x).normalize();
-      direction.addInPlace(offsetAxis.scale(Math.sin(offsetAngle)));
-      direction.normalize();
-    }
-
-    return direction;
+  /** Direction from bot toward player (for melee attack). */
+  public getAttackDirection(playerPosition: Vector3): Vector3 {
+    return playerPosition.subtract(this.mesh.position).normalize();
   }
 
   public getPosition(): Vector3 {
@@ -192,9 +151,8 @@ export class Bot implements IDamageable {
   public respawn(spawnPoint: Vector3): void {
     this.mesh.position = spawnPoint.clone();
     this.health.reset();
-    this.lastShotTime = 0;
     this.state = 'idle';
-    this.weapon.reset();
+    this.melee.reset();
   }
 
   public dispose(): void {

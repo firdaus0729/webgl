@@ -1,15 +1,15 @@
 import { UniversalCamera, Vector3, Mesh, Ray } from '@babylonjs/core';
 import { InputManager } from './input';
 import { Health } from './health';
-import { Weapon } from './weapon';
-import type { IDamageable } from './weapon';
+import { Melee } from './melee';
+import type { IDamageable } from './melee';
 import { GAME_CONSTANTS } from './constants';
-import { WeaponModel } from './weaponModel';
+import { FistModel } from './fistModel';
 
 export class Player implements IDamageable {
   public camera: UniversalCamera;
   public health: Health;
-  public weapon: Weapon;
+  public melee: Melee;
   private input: InputManager;
   private isDead: boolean = false;
   private canControl: boolean = true;
@@ -17,25 +17,24 @@ export class Player implements IDamageable {
   private bodyCollider: Mesh | null = null;
   private isOnGround: boolean = false;
   private lastGroundCheck: number = 0;
-  private weaponModel: WeaponModel | null = null;
+  private fistModel: FistModel | null = null;
   // Camera rotation - CS-like direct control (no smoothing)
   private currentRotationY: number = 0;
   private currentRotationX: number = 0;
 
-  constructor(camera: UniversalCamera, input: InputManager, weapon: Weapon) {
+  constructor(camera: UniversalCamera, input: InputManager, melee: Melee) {
     this.camera = camera;
     this.input = input;
-    this.weapon = weapon;
+    this.melee = melee;
     this.health = new Health();
 
     // Create head and body colliders for hit detection
     this.createHeadCollider();
     this.createBodyCollider();
     
-    // Create first-person weapon model
     const scene = this.camera.getScene();
     if (scene) {
-      this.weaponModel = new WeaponModel(scene, this.camera);
+      this.fistModel = new FistModel(scene, this.camera);
     }
 
     // Setup health callbacks
@@ -91,9 +90,8 @@ export class Player implements IDamageable {
     this.updateHeadColliderPosition();
     this.updateBodyColliderPosition();
     
-    // Update weapon model position
-    if (this.weaponModel) {
-      this.weaponModel.updatePosition();
+    if (this.fistModel) {
+      this.fistModel.updatePosition();
     }
 
     // Handle mouse look - CS-like direct, responsive control
@@ -231,7 +229,7 @@ export class Player implements IDamageable {
     this.health.reset();
     this.isDead = false;
     this.canControl = true;
-    this.weapon.reset();
+    this.melee.reset();
   }
 
   public setCanControl(canControl: boolean): void {
@@ -253,8 +251,8 @@ export class Player implements IDamageable {
     if (this.bodyCollider) {
       this.bodyCollider.dispose();
     }
-    if (this.weaponModel) {
-      this.weaponModel.dispose();
+    if (this.fistModel) {
+      this.fistModel.dispose();
     }
   }
 }
