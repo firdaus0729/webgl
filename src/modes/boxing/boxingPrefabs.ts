@@ -21,6 +21,9 @@ function cloneComponents(components: Component[], overrides: { position?: Vec2 }
     if (c.kind === 'health') {
       return { ...c };
     }
+    if (c.kind === 'blocking') {
+      return { ...c };
+    }
     return { ...c };
   });
 }
@@ -32,6 +35,7 @@ const boxerPlayerComponents: Component[] = [
   { kind: 'collider', shape: 'rect', width: 1, height: 2, isTrigger: false, mask: 0b11 },
   { kind: 'health', current: 100, max: 100 },
   { kind: 'tag', value: 'player' },
+  { kind: 'blocking', active: false },
   { kind: 'script', behaviorId: 'player_boxer_controller' },
 ];
 
@@ -42,6 +46,7 @@ const boxerAIComponents: Component[] = [
   { kind: 'collider', shape: 'rect', width: 1, height: 2, isTrigger: false, mask: 0b11 },
   { kind: 'health', current: 100, max: 100 },
   { kind: 'tag', value: 'opponent' },
+  { kind: 'blocking', active: false },
   { kind: 'script', behaviorId: 'ai_boxer_aggressive' },
 ];
 

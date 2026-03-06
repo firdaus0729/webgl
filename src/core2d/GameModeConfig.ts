@@ -30,6 +30,16 @@ export interface BoxingConfig {
   aiStyle: 'defensive' | 'balanced' | 'aggressive';
   pace: 'slow' | 'medium' | 'fast';
   theme: string;
+  /** Damage for jab (quick punch) */
+  jabDamage?: number;
+  /** Damage for strong punch */
+  strongDamage?: number;
+  /** Cooldown in seconds before next jab */
+  jabCooldown?: number;
+  /** Cooldown in seconds before next strong punch */
+  strongCooldown?: number;
+  /** Multiplier when victim is blocking (0 = no damage, 1 = full) */
+  blockDamageMultiplier?: number;
 }
 
 export interface TopdownArenaConfig {

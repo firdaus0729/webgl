@@ -3,12 +3,14 @@ import type { Time } from '../Types';
 import type { EventBus } from '../Events';
 import type { InputManager } from '../Input';
 import type { EntityId } from '../Types';
+import type { GameModeConfig } from '../GameModeConfig';
 
 export interface BehaviorContext {
   world: World;
   time: Time;
   input: InputManager;
   events: EventBus;
+  config?: GameModeConfig;
 }
 
 export type BehaviorFn = (entity: EntityId, ctx: BehaviorContext) => void;

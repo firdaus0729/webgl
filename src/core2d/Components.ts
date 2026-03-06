@@ -8,7 +8,8 @@ export type ComponentKind =
   | 'body'
   | 'health'
   | 'tag'
-  | 'script';
+  | 'script'
+  | 'blocking';
 
 export interface Transform2D {
   kind: 'transform';
@@ -60,6 +61,11 @@ export interface Script {
   behaviorId: string;
 }
 
+export interface Blocking {
+  kind: 'blocking';
+  active: boolean;
+}
+
 export type Component =
   | Transform2D
   | Velocity2D
@@ -68,4 +74,5 @@ export type Component =
   | Body2D
   | Health
   | Tag
-  | Script;
+  | Script
+  | Blocking;

@@ -8,6 +8,7 @@ import type { GameModeConfig } from '../core2d/GameModeConfig';
 import type { GameModeId } from '../core2d/Types';
 import { HUD2D } from './HUD2D';
 import './CanvasGameView.css';
+import { advanceToNextBoxingRound, resetBoxingMatch } from '../modes/boxing/boxingMatchState';
 
 const MODE_MAP: Partial<Record<GameModeId, typeof boxingMode>> = {
   boxing: boxingMode,
@@ -17,7 +18,7 @@ const MODE_MAP: Partial<Record<GameModeId, typeof boxingMode>> = {
 };
 
 const CONTROLS_HINT: Record<GameModeId, string> = {
-  boxing: 'A / D move · J or left-click punch',
+  boxing: 'A / D move · J jab, K strong punch · L block',
   topdown_arena: 'WASD move · Click or Space shoot',
   endless_runner: 'A / D switch lanes',
   grid_board: 'A / D select column · Enter drop',
@@ -29,18 +30,35 @@ interface CanvasGameViewProps {
   onBack: () => void;
 }
 
-type GameResult = { playerWon: boolean; isDraw?: boolean } | null;
+type BoxingRoundResult = {
+  kind: 'boxing_round';
+  winner: 'player' | 'opponent' | 'draw';
+  round: number;
+  score: { player: number; opponent: number };
+  targetWins: number;
+  isMatchOver: boolean;
+  reason?: 'ko' | 'time';
+};
+type GameResult =
+  | BoxingRoundResult
+  | { kind: 'generic'; playerWon: boolean; isDraw?: boolean }
+  | null;
 
 export function CanvasGameView({ config, template, onBack }: CanvasGameViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<Engine2D | null>(null);
   const [engine, setEngine] = useState<Engine2D | null>(null);
   const [gameResult, setGameResult] = useState<GameResult>(null);
+  const [countdownText, setCountdownText] = useState<string | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
     const mode = MODE_MAP[template];
     if (!container || !mode) return;
+
+    if (template === 'boxing') {
+      resetBoxingMatch();
+    }
 
     const canvas = document.createElement('canvas');
     canvas.width = container.clientWidth;
@@ -66,17 +84,32 @@ export function CanvasGameView({ config, template, onBack }: CanvasGameViewProps
 
     const unsubDie = eng.getEvents().subscribe('entity_died', (e) => {
       if (e.type !== 'entity_died') return;
+      if (template === 'boxing') return;
       const world = eng.getWorld();
       const tag = world.getComponent(e.entity, 'tag');
       const playerWon = tag?.value === 'opponent';
-      setGameResult({ playerWon });
+      setGameResult({ kind: 'generic', playerWon });
+      eng.stop();
     });
 
     const unsubRound = eng.getEvents().subscribe('round_ended', (e) => {
       if (e.type !== 'round_ended') return;
-      const isDraw = e.winner === 'draw';
-      const playerWon = e.winner === 'player';
-      setGameResult({ playerWon, isDraw });
+      if (template === 'boxing') {
+        setGameResult({
+          kind: 'boxing_round',
+          winner: e.winner ?? 'draw',
+          round: e.round ?? 1,
+          score: e.score ?? { player: 0, opponent: 0 },
+          targetWins: e.targetWins ?? 2,
+          isMatchOver: e.isMatchOver ?? true,
+          reason: e.reason,
+        });
+      } else {
+        const isDraw = e.winner === 'draw';
+        const playerWon = e.winner === 'player';
+        setGameResult({ kind: 'generic', playerWon, isDraw });
+      }
+      eng.stop();
     });
 
     eng.start();
@@ -84,17 +117,53 @@ export function CanvasGameView({ config, template, onBack }: CanvasGameViewProps
     return () => {
       unsubDie();
       unsubRound();
-      eng.stop();
+      eng.dispose();
       engineRef.current = null;
       setEngine(null);
       setGameResult(null);
+      setCountdownText(null);
       window.removeEventListener('resize', resize);
       container.removeChild(canvas);
     };
   }, [template, config.camera.mode]);
 
+  useEffect(() => {
+    if (!engine || template !== 'boxing') return;
+    const services = engine.getServices();
+    let lastCeil = 0;
+    let startTimeout: number | null = null;
+
+    const tick = () => {
+      const rem = services.getCountdownRemaining?.() ?? 0;
+      if (rem > 0) {
+        const ceil = Math.ceil(rem);
+        lastCeil = ceil;
+        setCountdownText(String(ceil));
+      } else if (lastCeil > 0) {
+        lastCeil = 0;
+        setCountdownText('START');
+        if (startTimeout) window.clearTimeout(startTimeout);
+        startTimeout = window.setTimeout(() => setCountdownText(null), 600);
+      }
+    };
+
+    tick();
+    const id = window.setInterval(tick, 50);
+    return () => {
+      window.clearInterval(id);
+      if (startTimeout) window.clearTimeout(startTimeout);
+    };
+  }, [engine, template]);
+
   const handleRestart = () => {
     setGameResult(null);
+    if (template === 'boxing') resetBoxingMatch();
+    engineRef.current?.restart();
+  };
+
+  const handleNextRound = () => {
+    setGameResult(null);
+    advanceToNextBoxingRound();
     engineRef.current?.restart();
   };
 
@@ -103,6 +172,11 @@ export function CanvasGameView({ config, template, onBack }: CanvasGameViewProps
   return (
     <div className="canvas-game-view">
       <div ref={containerRef} className="canvas-game-view-canvas-wrap" />
+      {template === 'boxing' && countdownText && (
+        <div className="canvas-game-view-countdown" aria-live="polite">
+          {countdownText}
+        </div>
+      )}
       <div className="canvas-game-view-controls-hint">{CONTROLS_HINT[template]}</div>
       {engine && showHUD && <HUD2D engine={engine} />}
       <button type="button" className="canvas-game-view-back" onClick={onBack}>
@@ -110,17 +184,63 @@ export function CanvasGameView({ config, template, onBack }: CanvasGameViewProps
       </button>
       {gameResult && (
         <div className="canvas-game-view-overlay" role="dialog" aria-modal="true" aria-labelledby="game-result-title">
-          <div className={`canvas-game-view-result-modal canvas-game-view-result-modal--${gameResult.isDraw ? 'draw' : gameResult.playerWon ? 'win' : 'lose'}`}>
+          <div
+            className={`canvas-game-view-result-modal canvas-game-view-result-modal--${
+              gameResult.kind === 'boxing_round'
+                ? gameResult.winner === 'draw'
+                  ? 'draw'
+                  : gameResult.winner === 'player'
+                    ? 'win'
+                    : 'lose'
+                : gameResult.isDraw
+                  ? 'draw'
+                  : gameResult.playerWon
+                    ? 'win'
+                    : 'lose'
+            }`}
+          >
             <h2 id="game-result-title" className="canvas-game-view-result-title">
-              {gameResult.isDraw ? 'Draw' : gameResult.playerWon ? 'Victory' : 'Defeat'}
+              {gameResult.kind === 'boxing_round'
+                ? `Round ${gameResult.round} ${
+                    gameResult.winner === 'draw' ? 'Draw' : gameResult.winner === 'player' ? 'Win' : 'Loss'
+                  }`
+                : gameResult.isDraw
+                  ? 'Draw'
+                  : gameResult.playerWon
+                    ? 'Victory'
+                    : 'Defeat'}
             </h2>
             <p className="canvas-game-view-result-subtitle">
-              {gameResult.isDraw ? 'No winner this round.' : gameResult.playerWon ? 'You won the match!' : 'The opponent won the match.'}
+              {gameResult.kind === 'boxing_round' ? (
+                <>
+                  <span>
+                    Score: You {gameResult.score.player} – {gameResult.score.opponent} Opponent (first to {gameResult.targetWins})
+                  </span>
+                  <br />
+                  <span>{gameResult.reason === 'ko' ? 'Knockout!' : gameResult.reason === 'time' ? "Time's up." : ''}</span>
+                </>
+              ) : gameResult.isDraw ? (
+                'No winner this round.'
+              ) : gameResult.playerWon ? (
+                'You won the match!'
+              ) : (
+                'The opponent won the match.'
+              )}
             </p>
             <div className="canvas-game-view-result-actions">
-              <button type="button" className="canvas-game-view-result-btn canvas-game-view-result-btn-primary" onClick={handleRestart}>
-                Restart
-              </button>
+              {gameResult.kind === 'boxing_round' && !gameResult.isMatchOver ? (
+                <button
+                  type="button"
+                  className="canvas-game-view-result-btn canvas-game-view-result-btn-primary"
+                  onClick={handleNextRound}
+                >
+                  Next round
+                </button>
+              ) : (
+                <button type="button" className="canvas-game-view-result-btn canvas-game-view-result-btn-primary" onClick={handleRestart}>
+                  Restart
+                </button>
+              )}
               <button type="button" className="canvas-game-view-result-btn canvas-game-view-result-btn-secondary" onClick={onBack}>
                 Back to menu
               </button>

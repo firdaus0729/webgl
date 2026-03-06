@@ -16,6 +16,10 @@ export interface ModeServices {
   getOpponentHealth?(): number;
   getTimeRemaining?(): number;
   getScore?(): { player: number; opponent: number };
+  /** Optional: pre-round countdown remaining seconds (e.g. 3..2..1..0) */
+  getCountdownRemaining?(): number;
+  /** Optional: round info for best-of style modes */
+  getRoundInfo?(): { round: number; targetWins: number; score: { player: number; opponent: number } };
 }
 
 export interface GameMode {
@@ -98,6 +102,12 @@ export class Engine2D {
     this.mode.teardownMatch?.(this.world);
   }
 
+  /** Stops the game and removes window listeners (call when leaving the game view). */
+  dispose(): void {
+    this.stop();
+    this.input.dispose();
+  }
+
   restart(config?: GameModeConfig): void {
     if (config) this.config = config;
     this.input.setMapping(this.config.inputMapping);
@@ -144,6 +154,7 @@ export class Engine2D {
       time,
       input: this.input,
       events: this.events,
+      config: this.config,
     };
     scriptSystem(this.world, time, behaviorCtx);
 

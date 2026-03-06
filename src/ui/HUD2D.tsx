@@ -16,6 +16,7 @@ export function HUD2D({ engine }: HUD2DProps) {
   const [playerHealth, setPlayerHealth] = useState(100);
   const [opponentHealth, setOpponentHealth] = useState(100);
   const [timeRemaining, setTimeRemaining] = useState(90);
+  const [scoreText, setScoreText] = useState<string | null>(null);
 
   useEffect(() => {
     if (!engine) return;
@@ -24,6 +25,12 @@ export function HUD2D({ engine }: HUD2DProps) {
       setPlayerHealth(services.getPlayerHealth?.() ?? 100);
       setOpponentHealth(services.getOpponentHealth?.() ?? 100);
       setTimeRemaining(services.getTimeRemaining?.() ?? 90);
+      const roundInfo = services.getRoundInfo?.();
+      if (roundInfo) {
+        setScoreText(`R${roundInfo.round} · You ${roundInfo.score.player}–${roundInfo.score.opponent} (to ${roundInfo.targetWins})`);
+      } else {
+        setScoreText(null);
+      }
     };
     tick();
     const id = setInterval(tick, 100);
@@ -40,7 +47,10 @@ export function HUD2D({ engine }: HUD2DProps) {
           </div>
           <div className="hud2d-value">{playerHealth}/100</div>
         </div>
-        <div className="hud2d-timer">{formatTime(timeRemaining)}</div>
+        <div className="hud2d-timer">
+          {formatTime(timeRemaining)}
+          {scoreText && <div className="hud2d-score">{scoreText}</div>}
+        </div>
         <div className="hud2d-health-block">
           <div className="hud2d-label">Opponent</div>
           <div className="hud2d-bar-wrap">

@@ -4,15 +4,37 @@ import type { GameModeConfig } from '../../core2d/GameModeConfig';
 import type { ModeServices } from '../../core2d/Engine2D';
 import { boxingDefaultConfig } from './boxingConfig';
 import { spawnFromPrefab } from './boxingPrefabs';
-import { registerBoxingBehaviors } from './boxingBehaviors';
+import { registerBoxingBehaviors, resetBoxingBehaviorState } from './boxingBehaviors';
+import {
+  getBoxingFightElapsed,
+  getBoxingCountdownRemaining,
+  getBoxingRoundInfo,
+  recordBoxingRoundEnd,
+  startBoxingRound,
+} from './boxingMatchState';
 
 registerBoxingBehaviors();
+
+let roundEndEmitted = false;
 
 export const boxingMode: GameMode = {
   id: 'boxing',
   defaultConfig: boxingDefaultConfig,
 
-  setupMatch(world: World, config: GameModeConfig, _services: ModeServices): void {
+  setupMatch(world: World, config: GameModeConfig, services: ModeServices): void {
+    roundEndEmitted = false;
+    resetBoxingBehaviorState();
+    startBoxingRound();
+
+    services.getCountdownRemaining = () => getBoxingCountdownRemaining();
+    services.getRoundInfo = () => getBoxingRoundInfo();
+    services.getScore = () => getBoxingRoundInfo().score;
+    services.getTimeRemaining = () => {
+      const limit = config.rules.timeLimit ?? 90;
+      const elapsedFight = getBoxingFightElapsed();
+      return Math.max(0, limit - elapsedFight);
+    };
+
     const boxing = config.boxing;
     const ringWidth = boxing?.ringWidth ?? 20;
     const half = ringWidth / 2;
@@ -34,6 +56,34 @@ export const boxingMode: GameMode = {
       const t = world.getComponent(id, 'transform');
       if (!t) continue;
       t.position.x = Math.max(-ringHalf + margin, Math.min(ringHalf - margin, t.position.x));
+    }
+
+    const timeLimit = ctx.config?.rules?.timeLimit ?? 90;
+    const fightElapsed = getBoxingFightElapsed();
+    if (!roundEndEmitted && fightElapsed >= timeLimit) {
+      const playerIds = world.query({ tag: 'player' });
+      const opponentIds = world.query({ tag: 'opponent' });
+      const playerId = playerIds[0];
+      const opponentId = opponentIds[0];
+      const pH = playerId != null ? world.getComponent(playerId, 'health')?.current ?? 0 : 0;
+      const oH = opponentId != null ? world.getComponent(opponentId, 'health')?.current ?? 0 : 0;
+      let winner: 'player' | 'opponent' | 'draw' = 'draw';
+      if (pH > oH) winner = 'player';
+      else if (oH > pH) winner = 'opponent';
+
+      const result = recordBoxingRoundEnd(winner, 'time');
+      if (result) {
+        roundEndEmitted = true;
+        ctx.events.emit({
+          type: 'round_ended',
+          winner: result.winner,
+          round: result.round,
+          score: result.score,
+          isMatchOver: result.isMatchOver,
+          targetWins: result.targetWins,
+          reason: result.reason,
+        });
+      }
     }
   },
 

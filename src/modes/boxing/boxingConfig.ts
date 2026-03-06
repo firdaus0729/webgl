@@ -11,6 +11,7 @@ export const boxingDefaultConfig: GameModeConfig = {
     move_right: ['ArrowRight', 'd'],
     attack_primary: ['j', 'Mouse0'],
     attack_secondary: ['k'],
+    block: ['l'],
     pause: ['Escape'],
   } as InputMapping,
   physics: {
@@ -28,5 +29,10 @@ export const boxingDefaultConfig: GameModeConfig = {
     aiStyle: 'aggressive',
     pace: 'fast',
     theme: 'neon',
+    jabDamage: 8,
+    strongDamage: 18,
+    jabCooldown: 0.25,
+    strongCooldown: 0.6,
+    blockDamageMultiplier: 0.25,
   },
 };

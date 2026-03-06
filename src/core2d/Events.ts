@@ -24,6 +24,16 @@ export interface DeathEvent {
 export interface RoundEvent {
   type: 'round_started' | 'round_ended';
   winner?: 'player' | 'opponent' | 'draw';
+  /** Optional round number (1-based) */
+  round?: number;
+  /** Optional score for best-of style modes */
+  score?: { player: number; opponent: number };
+  /** Optional reason for round ending */
+  reason?: 'ko' | 'time';
+  /** Optional hint: is the whole match over? */
+  isMatchOver?: boolean;
+  /** Optional win condition (e.g. first to 2) */
+  targetWins?: number;
 }
 
 export type GameEvent = CollisionEvent | DeathEvent | RoundEvent;

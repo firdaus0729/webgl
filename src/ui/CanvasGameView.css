@@ -47,6 +47,20 @@
   z-index: 1001;
 }
 
+.canvas-game-view-countdown {
+  position: absolute;
+  top: 35%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 4.5rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+  text-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  z-index: 1500;
+  pointer-events: none;
+}
+
 /* Game result modal — centered, professional */
 .canvas-game-view-overlay {
   position: absolute;

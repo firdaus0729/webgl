@@ -6,6 +6,7 @@ export type ActionId =
   | 'jump'
   | 'attack_primary'
   | 'attack_secondary'
+  | 'block'
   | 'confirm'
   | 'cancel'
   | 'pause';
@@ -37,14 +38,14 @@ export class InputManager {
   private mouseDown: Set<number> = new Set();
   private mouseJustPressed: Set<number> = new Set();
   private mapping: InputMapping;
+  private boundKeydown: (e: KeyboardEvent) => void;
+  private boundKeyup: (e: KeyboardEvent) => void;
+  private boundMousedown: (e: MouseEvent) => void;
+  private boundMouseup: (e: MouseEvent) => void;
 
   constructor(mapping: InputMapping, _canvas?: HTMLCanvasElement | null) {
     this.mapping = mapping;
-    this.setupListeners();
-  }
-
-  private setupListeners(): void {
-    window.addEventListener('keydown', (e) => {
+    this.boundKeydown = (e: KeyboardEvent) => {
       const key = normalizeKey(e.key);
       if (!this.keysDown.has(key)) {
         this.keysJustPressed.add(key);
@@ -53,24 +54,25 @@ export class InputManager {
       if (['a', 'd', 'j', 'k', 'arrowleft', 'arrowright', ' '].includes(key)) {
         e.preventDefault();
       }
-    });
-
-    window.addEventListener('keyup', (e) => {
+    };
+    this.boundKeyup = (e: KeyboardEvent) => {
       this.keysDown.delete(normalizeKey(e.key));
-    });
-
-    window.addEventListener('mousedown', (e) => {
+    };
+    this.boundMousedown = (e: MouseEvent) => {
       const btn = e.button;
       if (!this.mouseDown.has(btn)) {
         this.mouseJustPressed.add(btn);
       }
       this.mouseDown.add(btn);
       e.preventDefault();
-    });
-
-    window.addEventListener('mouseup', (e) => {
+    };
+    this.boundMouseup = (e: MouseEvent) => {
       this.mouseDown.delete(e.button);
-    });
+    };
+    window.addEventListener('keydown', this.boundKeydown);
+    window.addEventListener('keyup', this.boundKeyup);
+    window.addEventListener('mousedown', this.boundMousedown);
+    window.addEventListener('mouseup', this.boundMouseup);
   }
 
   setMapping(mapping: InputMapping): void {
@@ -113,6 +115,10 @@ export class InputManager {
   }
 
   dispose(): void {
+    window.removeEventListener('keydown', this.boundKeydown);
+    window.removeEventListener('keyup', this.boundKeyup);
+    window.removeEventListener('mousedown', this.boundMousedown);
+    window.removeEventListener('mouseup', this.boundMouseup);
     this.keysDown.clear();
     this.keysJustPressed.clear();
     this.mouseDown.clear();

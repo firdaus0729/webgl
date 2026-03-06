@@ -61,3 +61,10 @@
   min-width: 4rem;
   text-align: center;
 }
+
+.hud2d-score {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 600;
+}
