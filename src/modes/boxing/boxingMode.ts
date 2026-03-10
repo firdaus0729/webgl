@@ -34,28 +34,54 @@ export const boxingMode: GameMode = {
       const elapsedFight = getBoxingFightElapsed();
       return Math.max(0, limit - elapsedFight);
     };
+    services.getPlayerStamina = () => {
+      const ids = world.query({ tag: 'player' });
+      const id = ids[0];
+      if (id == null) return { current: 100, max: 100 };
+      const s = world.getComponent(id, 'stamina');
+      return s ? { current: s.current, max: s.max } : { current: 100, max: 100 };
+    };
+    services.getOpponentStamina = () => {
+      const ids = world.query({ tag: 'opponent' });
+      const id = ids[0];
+      if (id == null) return { current: 100, max: 100 };
+      const s = world.getComponent(id, 'stamina');
+      return s ? { current: s.current, max: s.max } : { current: 100, max: 100 };
+    };
 
     const boxing = config.boxing;
     const ringWidth = boxing?.ringWidth ?? 20;
-    const half = ringWidth / 2;
+    const ringDepth = boxing?.ringDepth ?? 10;
+    const halfW = ringWidth / 2;
     world.createEntity([
-      { kind: 'transform', position: { x: 0, y: -1.5 }, rotation: 0, scale: { x: 1, y: 1 } },
+      { kind: 'transform', position: { x: 0, y: 0 }, rotation: 0, scale: { x: 1, y: 1 } },
       { kind: 'sprite', spriteId: 'ring', layer: 'background' },
-      { kind: 'collider', shape: 'rect', width: ringWidth, height: 1, isTrigger: true, mask: 0 },
+      { kind: 'collider', shape: 'rect', width: ringWidth, height: ringDepth, isTrigger: true, mask: 0 },
+      { kind: 'tag', value: 'ring' },
     ]);
-    spawnFromPrefab(world, boxing?.playerPrefabId ?? 'boxer_player', { x: -half + 2, y: 0 });
-    spawnFromPrefab(world, boxing?.opponentPrefabId ?? 'boxer_ai', { x: half - 2, y: 0 });
+    spawnFromPrefab(world, boxing?.playerPrefabId ?? 'boxer_player', { x: -halfW + 2, y: 0 });
+    spawnFromPrefab(world, boxing?.opponentPrefabId ?? 'boxer_ai', { x: halfW - 2, y: 0 });
   },
 
   update(world, _time, ctx) {
     const boxing = ctx.config?.boxing;
-    const ringHalf = boxing ? boxing.ringWidth / 2 : 10;
-    const margin = 1.2;
+    const ringWidth = boxing?.ringWidth ?? 20;
+    const ringDepth = boxing?.ringDepth ?? 10;
+    const halfW = ringWidth / 2;
+    const halfD = ringDepth / 2;
+    const inset = 0.5;
+    const minX = -halfW + inset;
+    const maxX = halfW - inset;
+    const minY = -halfD + inset;
+    const maxY = halfD - inset;
     const ids = world.query({ all: ['transform'] });
+    const tagComp = (id: number) => world.getComponent(id, 'tag')?.value;
     for (const id of ids) {
+      if (tagComp(id) === 'ring') continue;
       const t = world.getComponent(id, 'transform');
       if (!t) continue;
-      t.position.x = Math.max(-ringHalf + margin, Math.min(ringHalf - margin, t.position.x));
+      t.position.x = Math.max(minX, Math.min(maxX, t.position.x));
+      t.position.y = Math.max(minY, Math.min(maxY, t.position.y));
     }
 
     const timeLimit = ctx.config?.rules?.timeLimit ?? 90;

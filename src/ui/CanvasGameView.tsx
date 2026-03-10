@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Engine2D } from '../core2d/Engine2D';
 import { boxingMode } from '../modes/boxing/boxingMode';
+import { platformerMode } from '../modes/platformer/platformerMode';
 import { arenaMode } from '../modes/topdownArena/arenaMode';
 import { runnerMode } from '../modes/endlessRunner/runnerMode';
 import { gridMode } from '../modes/gridBoard/gridMode';
@@ -12,14 +13,16 @@ import { advanceToNextBoxingRound, resetBoxingMatch } from '../modes/boxing/boxi
 
 const MODE_MAP: Partial<Record<GameModeId, typeof boxingMode>> = {
   boxing: boxingMode,
+  platformer: platformerMode as typeof boxingMode,
   topdown_arena: arenaMode as typeof boxingMode,
   endless_runner: runnerMode as typeof boxingMode,
   grid_board: gridMode as typeof boxingMode,
 };
 
 const CONTROLS_HINT: Record<GameModeId, string> = {
-  boxing: 'A / D move · J jab, K strong punch · L block',
-  topdown_arena: 'WASD move · Click or Space shoot',
+  boxing: 'A/D left/right · W/S forward/back · Move inside the ring · J jab, K strong · L block',
+  platformer: 'A / D move · Space or W jump · Stomp enemies',
+  topdown_arena: 'W A S D move · Space or click shoot',
   endless_runner: 'A / D switch lanes',
   grid_board: 'A / D select column · Enter drop',
 };
@@ -39,8 +42,16 @@ type BoxingRoundResult = {
   isMatchOver: boolean;
   reason?: 'ko' | 'time';
 };
+type LevelCompleteResult = {
+  kind: 'level_complete';
+  score: number;
+  starsEarned?: number;
+  enemiesKilled?: number;
+  totalScore?: number;
+};
 type GameResult =
   | BoxingRoundResult
+  | LevelCompleteResult
   | { kind: 'generic'; playerWon: boolean; isDraw?: boolean }
   | null;
 
@@ -112,11 +123,26 @@ export function CanvasGameView({ config, template, onBack }: CanvasGameViewProps
       eng.stop();
     });
 
+    const unsubLevelComplete = eng.getEvents().subscribe('level_complete', (e) => {
+      if (e.type !== 'level_complete') return;
+      if (template === 'platformer') {
+        setGameResult({
+          kind: 'level_complete',
+          score: e.score ?? 0,
+          starsEarned: e.starsEarned ?? 0,
+          enemiesKilled: e.enemiesKilled ?? 0,
+          totalScore: e.totalScore ?? e.score ?? 0,
+        });
+        eng.stop();
+      }
+    });
+
     eng.start();
 
     return () => {
       unsubDie();
       unsubRound();
+      unsubLevelComplete();
       eng.dispose();
       engineRef.current = null;
       setEngine(null);
@@ -167,7 +193,7 @@ export function CanvasGameView({ config, template, onBack }: CanvasGameViewProps
     engineRef.current?.restart();
   };
 
-  const showHUD = template === 'boxing' || template === 'topdown_arena';
+  const showHUD = template === 'boxing' || template === 'platformer' || template === 'topdown_arena';
 
   return (
     <div className="canvas-game-view">
@@ -186,32 +212,48 @@ export function CanvasGameView({ config, template, onBack }: CanvasGameViewProps
         <div className="canvas-game-view-overlay" role="dialog" aria-modal="true" aria-labelledby="game-result-title">
           <div
             className={`canvas-game-view-result-modal canvas-game-view-result-modal--${
-              gameResult.kind === 'boxing_round'
-                ? gameResult.winner === 'draw'
-                  ? 'draw'
-                  : gameResult.winner === 'player'
-                    ? 'win'
-                    : 'lose'
-                : gameResult.isDraw
-                  ? 'draw'
-                  : gameResult.playerWon
-                    ? 'win'
-                    : 'lose'
+              gameResult.kind === 'level_complete'
+                ? 'win'
+                : gameResult.kind === 'boxing_round'
+                  ? gameResult.winner === 'draw'
+                    ? 'draw'
+                    : gameResult.winner === 'player'
+                      ? 'win'
+                      : 'lose'
+                  : gameResult.kind === 'generic' && gameResult.isDraw
+                    ? 'draw'
+                    : gameResult.kind === 'generic' && gameResult.playerWon
+                      ? 'win'
+                      : gameResult.kind === 'generic'
+                        ? 'lose'
+                        : 'win'
             }`}
           >
             <h2 id="game-result-title" className="canvas-game-view-result-title">
-              {gameResult.kind === 'boxing_round'
-                ? `Round ${gameResult.round} ${
-                    gameResult.winner === 'draw' ? 'Draw' : gameResult.winner === 'player' ? 'Win' : 'Loss'
-                  }`
-                : gameResult.isDraw
-                  ? 'Draw'
-                  : gameResult.playerWon
-                    ? 'Victory'
-                    : 'Defeat'}
+              {gameResult.kind === 'level_complete'
+                ? 'Level Complete'
+                : gameResult.kind === 'boxing_round'
+                  ? `Round ${gameResult.round} ${
+                      gameResult.winner === 'draw' ? 'Draw' : gameResult.winner === 'player' ? 'Win' : 'Loss'
+                    }`
+                  : gameResult.kind === 'generic' && gameResult.isDraw
+                    ? 'Draw'
+                    : gameResult.kind === 'generic' && gameResult.playerWon
+                      ? 'Victory'
+                      : 'Defeat'}
             </h2>
             <p className="canvas-game-view-result-subtitle">
-              {gameResult.kind === 'boxing_round' ? (
+              {gameResult.kind === 'level_complete' ? (
+                <>
+                  <span className="canvas-game-view-result-stat">Score: {gameResult.totalScore ?? gameResult.score}</span>
+                  {typeof gameResult.starsEarned === 'number' && (
+                    <span className="canvas-game-view-result-stat">Stars: {gameResult.starsEarned}</span>
+                  )}
+                  {typeof gameResult.enemiesKilled === 'number' && (
+                    <span className="canvas-game-view-result-stat">Enemies defeated: {gameResult.enemiesKilled}</span>
+                  )}
+                </>
+              ) : gameResult.kind === 'boxing_round' ? (
                 <>
                   <span>
                     Score: You {gameResult.score.player} – {gameResult.score.opponent} Opponent (first to {gameResult.targetWins})
@@ -219,9 +261,9 @@ export function CanvasGameView({ config, template, onBack }: CanvasGameViewProps
                   <br />
                   <span>{gameResult.reason === 'ko' ? 'Knockout!' : gameResult.reason === 'time' ? "Time's up." : ''}</span>
                 </>
-              ) : gameResult.isDraw ? (
+              ) : gameResult.kind === 'generic' && gameResult.isDraw ? (
                 'No winner this round.'
-              ) : gameResult.playerWon ? (
+              ) : gameResult.kind === 'generic' && gameResult.playerWon ? (
                 'You won the match!'
               ) : (
                 'The opponent won the match.'

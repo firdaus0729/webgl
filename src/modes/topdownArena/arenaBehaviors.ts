@@ -1,10 +1,14 @@
 import type { EntityId } from '../../core2d/Types';
+import type { BehaviorContext } from '../../core2d/Systems/ScriptSystem';
 import { registerBehavior } from '../../core2d/Systems/ScriptSystem';
 import { spawnArenaPrefab } from './arenaPrefabs';
 
-const BULLET_COOLDOWN = 0.2;
+const playerLastShot = new Map<EntityId, number>();
 
-const playerCooldowns = new Map<EntityId, number>();
+function getPlayerId(world: BehaviorContext['world']): EntityId | null {
+  const ids = world.query({ tag: 'player' });
+  return ids[0] ?? null;
+}
 
 export function registerArenaBehaviors(): void {
   registerBehavior('player_arena_shooter', (entity, ctx) => {
@@ -13,32 +17,33 @@ export function registerArenaBehaviors(): void {
     const transform = world.getComponent(entity, 'transform');
     if (!velocity || !transform) return;
 
-    let vx = 0, vy = 0;
-    if (input.isActionDown('move_left')) vx -= 1;
-    if (input.isActionDown('move_right')) vx += 1;
-    if (input.isActionDown('move_up')) vy += 1;
-    if (input.isActionDown('move_down')) vy -= 1;
-    if (vx !== 0 || vy !== 0) {
-      const len = Math.hypot(vx, vy);
-      const speed = 8;
-      velocity.vel.x = (vx / len) * speed;
-      velocity.vel.y = (vy / len) * speed;
-      transform.rotation = Math.atan2(vx, -vy);
-    } else {
-      velocity.vel.x = 0;
-      velocity.vel.y = 0;
-    }
+    const cfg = ctx.config?.topdownArena;
+    const speed = cfg?.playerSpeed ?? 8;
+    let vx = 0;
+    let vy = 0;
+    if (input.isActionDown('move_left')) vx -= speed;
+    if (input.isActionDown('move_right')) vx += speed;
+    if (input.isActionDown('move_up')) vy += speed;
+    if (input.isActionDown('move_down')) vy -= speed;
+    velocity.vel.x = vx;
+    velocity.vel.y = vy;
 
-    const last = playerCooldowns.get(entity) ?? 0;
-    if (input.isActionDown('attack_primary') && time.elapsed - last >= BULLET_COOLDOWN) {
-      const bulletSpeed = 18;
-      const dx = Math.sin(transform.rotation);
-      const dy = -Math.cos(transform.rotation);
-      spawnArenaPrefab(world as { createEntity: (c: import('../../core2d/Components').Component[]) => number }, 'bullet', {
-        x: transform.position.x + dx * 0.6,
-        y: transform.position.y + dy * 0.6,
-      }, { vel: { x: dx * bulletSpeed, y: dy * bulletSpeed } });
-      playerCooldowns.set(entity, time.elapsed);
+    const lastShot = playerLastShot.get(entity) ?? 0;
+    const fireInterval = cfg?.fireInterval ?? 0.3;
+    if (input.isActionDown('attack_primary') && time.elapsed - lastShot >= fireInterval) {
+      playerLastShot.set(entity, time.elapsed);
+      const bulletSpeed = cfg?.bulletSpeed ?? 18;
+      let dx = 1;
+      let dy = 0;
+      if (vx !== 0 || vy !== 0) {
+        dx = vx;
+        dy = vy;
+      }
+      const len = Math.hypot(dx, dy) || 1;
+      spawnArenaPrefab(world, 'bullet', {
+        position: { x: transform.position.x + (dx / len) * 0.6, y: transform.position.y + (dy / len) * 0.6 },
+        vel: { x: (dx / len) * bulletSpeed, y: (dy / len) * bulletSpeed },
+      });
     }
   });
 
@@ -47,16 +52,21 @@ export function registerArenaBehaviors(): void {
     const velocity = world.getComponent(entity, 'velocity');
     const transform = world.getComponent(entity, 'transform');
     if (!velocity || !transform) return;
-    const players = world.query({ tag: 'player' });
-    const targetId = players[0];
-    if (targetId == null) return;
-    const target = world.getComponent(targetId, 'transform');
-    if (!target) return;
-    const dx = target.position.x - transform.position.x;
-    const dy = target.position.y - transform.position.y;
-    const len = Math.hypot(dx, dy);
-    if (len < 0.5) return;
-    const speed = 4;
+
+    const playerId = getPlayerId(world);
+    if (playerId == null) {
+      velocity.vel.x = 0;
+      velocity.vel.y = 0;
+      return;
+    }
+    const playerT = world.getComponent(playerId, 'transform');
+    if (!playerT) return;
+
+    const dx = playerT.position.x - transform.position.x;
+    const dy = playerT.position.y - transform.position.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const cfg = ctx.config?.topdownArena;
+    const speed = cfg?.enemySpeed ?? 3.5;
     velocity.vel.x = (dx / len) * speed;
     velocity.vel.y = (dy / len) * speed;
   });

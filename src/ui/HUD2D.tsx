@@ -17,6 +17,8 @@ export function HUD2D({ engine }: HUD2DProps) {
   const [opponentHealth, setOpponentHealth] = useState(100);
   const [timeRemaining, setTimeRemaining] = useState(90);
   const [scoreText, setScoreText] = useState<string | null>(null);
+  const [playerStamina, setPlayerStamina] = useState<{ current: number; max: number } | null>(null);
+  const [opponentStamina, setOpponentStamina] = useState<{ current: number; max: number } | null>(null);
 
   useEffect(() => {
     if (!engine) return;
@@ -31,11 +33,15 @@ export function HUD2D({ engine }: HUD2DProps) {
       } else {
         setScoreText(null);
       }
+      setPlayerStamina(services.getPlayerStamina?.() ?? null);
+      setOpponentStamina(services.getOpponentStamina?.() ?? null);
     };
     tick();
     const id = setInterval(tick, 100);
     return () => clearInterval(id);
   }, [engine]);
+
+  const showStamina = playerStamina != null && playerStamina.max > 0;
 
   return (
     <div className="hud2d">
@@ -46,6 +52,14 @@ export function HUD2D({ engine }: HUD2DProps) {
             <div className="hud2d-bar hud2d-bar-player" style={{ width: `${playerHealth}%` }} />
           </div>
           <div className="hud2d-value">{playerHealth}/100</div>
+          {showStamina && playerStamina && (
+            <>
+              <div className="hud2d-bar-wrap hud2d-stamina-bar">
+                <div className="hud2d-bar hud2d-bar-stamina" style={{ width: `${(playerStamina.current / playerStamina.max) * 100}%` }} />
+              </div>
+              <div className="hud2d-value hud2d-stamina-label">Stamina</div>
+            </>
+          )}
         </div>
         <div className="hud2d-timer">
           {formatTime(timeRemaining)}
@@ -57,6 +71,14 @@ export function HUD2D({ engine }: HUD2DProps) {
             <div className="hud2d-bar hud2d-bar-opponent" style={{ width: `${opponentHealth}%` }} />
           </div>
           <div className="hud2d-value">{opponentHealth}/100</div>
+          {showStamina && opponentStamina && (
+            <>
+              <div className="hud2d-bar-wrap hud2d-stamina-bar">
+                <div className="hud2d-bar hud2d-bar-stamina-opp" style={{ width: `${(opponentStamina.current / opponentStamina.max) * 100}%` }} />
+              </div>
+              <div className="hud2d-value hud2d-stamina-label">Stamina</div>
+            </>
+          )}
         </div>
       </div>
     </div>

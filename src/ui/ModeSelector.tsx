@@ -6,7 +6,8 @@ import './ModeSelector.css';
 
 const TEMPLATES: { id: GameModeId; label: string }[] = [
   { id: 'boxing', label: 'Boxing (side-view duel)' },
-  { id: 'topdown_arena', label: 'Top-down arena shooter' },
+  { id: 'platformer', label: 'Platformer (Mario style)' },
+  { id: 'topdown_arena', label: 'Top-down shooter' },
   { id: 'endless_runner', label: 'Endless runner' },
   { id: 'grid_board', label: 'Grid / Connect 4' },
 ];

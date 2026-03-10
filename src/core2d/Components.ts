@@ -9,7 +9,8 @@ export type ComponentKind =
   | 'health'
   | 'tag'
   | 'script'
-  | 'blocking';
+  | 'blocking'
+  | 'stamina';
 
 export interface Transform2D {
   kind: 'transform';
@@ -66,6 +67,12 @@ export interface Blocking {
   active: boolean;
 }
 
+export interface Stamina {
+  kind: 'stamina';
+  current: number;
+  max: number;
+}
+
 export type Component =
   | Transform2D
   | Velocity2D
@@ -75,4 +82,5 @@ export type Component =
   | Health
   | Tag
   | Script
-  | Blocking;
+  | Blocking
+  | Stamina;

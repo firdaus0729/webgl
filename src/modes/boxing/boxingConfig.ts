@@ -9,6 +9,8 @@ export const boxingDefaultConfig: GameModeConfig = {
   inputMapping: {
     move_left: ['ArrowLeft', 'a'],
     move_right: ['ArrowRight', 'd'],
+    move_forward: ['w'],
+    move_back: ['s'],
     attack_primary: ['j', 'Mouse0'],
     attack_secondary: ['k'],
     block: ['l'],
@@ -24,6 +26,7 @@ export const boxingDefaultConfig: GameModeConfig = {
   },
   boxing: {
     ringWidth: 20,
+    ringDepth: 10,
     playerPrefabId: 'boxer_player',
     opponentPrefabId: 'boxer_ai',
     aiStyle: 'aggressive',
@@ -33,6 +36,12 @@ export const boxingDefaultConfig: GameModeConfig = {
     strongDamage: 18,
     jabCooldown: 0.25,
     strongCooldown: 0.6,
-    blockDamageMultiplier: 0.25,
+    blockDamageMultiplier: 0.3,
+    staminaMax: 100,
+    staminaRegen: 8,
+    jabStaminaCost: 5,
+    strongStaminaCost: 18,
+    blockStaminaDrainAfterSec: 3,
+    blockStaminaDrainPerSec: 12,
   },
 };

@@ -7,7 +7,8 @@ export type EventType =
   | 'entity_died'
   | 'score_changed'
   | 'round_started'
-  | 'round_ended';
+  | 'round_ended'
+  | 'level_complete';
 
 export interface CollisionEvent {
   type: 'collision' | 'trigger_enter' | 'trigger_exit';
@@ -36,7 +37,18 @@ export interface RoundEvent {
   targetWins?: number;
 }
 
-export type GameEvent = CollisionEvent | DeathEvent | RoundEvent;
+export interface LevelCompleteEvent {
+  type: 'level_complete';
+  score?: number;
+  /** Stars collected (platformer) */
+  starsEarned?: number;
+  /** Enemies defeated (platformer) */
+  enemiesKilled?: number;
+  /** Total score displayed on end screen */
+  totalScore?: number;
+}
+
+export type GameEvent = CollisionEvent | DeathEvent | RoundEvent | LevelCompleteEvent;
 
 type EventHandler = (e: GameEvent) => void;
 

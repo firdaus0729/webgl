@@ -3,6 +3,8 @@ export type ActionId =
   | 'move_right'
   | 'move_up'
   | 'move_down'
+  | 'move_forward'
+  | 'move_back'
   | 'jump'
   | 'attack_primary'
   | 'attack_secondary'
@@ -51,7 +53,7 @@ export class InputManager {
         this.keysJustPressed.add(key);
       }
       this.keysDown.add(key);
-      if (['a', 'd', 'j', 'k', 'arrowleft', 'arrowright', ' '].includes(key)) {
+      if (['a', 'd', 'w', 's', 'j', 'k', 'arrowleft', 'arrowright', ' '].includes(key)) {
         e.preventDefault();
       }
     };

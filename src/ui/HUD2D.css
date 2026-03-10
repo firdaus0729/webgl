@@ -68,3 +68,21 @@
   color: rgba(255, 255, 255, 0.7);
   font-weight: 600;
 }
+
+.hud2d-stamina-bar {
+  height: 6px;
+  margin-top: 0.35rem;
+}
+
+.hud2d-bar-stamina {
+  background: #2ecc71;
+}
+
+.hud2d-bar-stamina-opp {
+  background: #e67e22;
+}
+
+.hud2d-stamina-label {
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.5);
+}

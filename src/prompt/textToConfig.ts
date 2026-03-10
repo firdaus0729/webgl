@@ -1,7 +1,8 @@
 import type { GameModeId } from '../core2d/Types';
 import type { GameModeConfig } from '../core2d/GameModeConfig';
-import type { BoxingConfig, TopdownArenaConfig, EndlessRunnerConfig, GridBoardConfig } from '../core2d/GameModeConfig';
+import type { BoxingConfig, PlatformerConfig, TopdownArenaConfig, EndlessRunnerConfig, GridBoardConfig } from '../core2d/GameModeConfig';
 import { boxingDefaultConfig } from '../modes/boxing/boxingConfig';
+import { platformerDefaultConfig } from '../modes/platformer/platformerConfig';
 import { arenaDefaultConfig } from '../modes/topdownArena/arenaConfig';
 import { runnerDefaultConfig } from '../modes/endlessRunner/runnerConfig';
 import { gridDefaultConfig } from '../modes/gridBoard/gridConfig';
@@ -36,7 +37,7 @@ function parseArenaTraits(text: string): Partial<TopdownArenaConfig> {
     traits.spawnInterval = 4;
     traits.enemySpeed = 2;
   }
-  if (/\b(big|large|huge)\b/.test(lower)) traits.arenaRadius = 16;
+  if (/\b(big|large|huge)\b/.test(lower)) traits.arenaRadius = 18;
   return traits;
 }
 
@@ -46,6 +47,20 @@ function parseRunnerTraits(text: string): Partial<EndlessRunnerConfig> {
   if (/\b(fast|quick)\b/.test(lower)) traits.baseSpeed = 12;
   if (/\b(slow|easy)\b/.test(lower)) traits.baseSpeed = 5;
   if (/\b(hard|tough)\b/.test(lower)) traits.spawnInterval = 0.8;
+  return traits;
+}
+
+function parsePlatformerTraits(text: string): Partial<PlatformerConfig> {
+  const lower = text.toLowerCase();
+  const traits: Partial<PlatformerConfig> = {};
+  if (/\b(fast|quick)\b/.test(lower)) {
+    traits.moveSpeed = 9;
+    traits.jumpForce = 14;
+  }
+  if (/\b(slow|easy)\b/.test(lower)) {
+    traits.moveSpeed = 5;
+    traits.jumpForce = 10;
+  }
   return traits;
 }
 
@@ -69,16 +84,22 @@ export function textToConfig(input: PromptInput): GameModeConfig {
       if (base.boxing) base.boxing = { ...base.boxing, ...overrides };
       return base;
     }
-    case 'topdown_arena': {
-      const base = { ...arenaDefaultConfig };
-      const overrides = parseArenaTraits(text);
-      if (base.topdownArena) base.topdownArena = { ...base.topdownArena, ...overrides };
-      return base;
-    }
     case 'endless_runner': {
       const base = { ...runnerDefaultConfig };
       const overrides = parseRunnerTraits(text);
       if (base.endlessRunner) base.endlessRunner = { ...base.endlessRunner, ...overrides };
+      return base;
+    }
+    case 'platformer': {
+      const base = { ...platformerDefaultConfig };
+      const overrides = parsePlatformerTraits(text);
+      if (base.platformer) base.platformer = { ...base.platformer, ...overrides };
+      return base;
+    }
+    case 'topdown_arena': {
+      const base = { ...arenaDefaultConfig };
+      const overrides = parseArenaTraits(text);
+      if (base.topdownArena) base.topdownArena = { ...base.topdownArena, ...overrides };
       return base;
     }
     case 'grid_board': {

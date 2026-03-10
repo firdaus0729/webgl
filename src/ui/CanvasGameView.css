@@ -112,6 +112,12 @@
   line-height: 1.4;
 }
 
+.canvas-game-view-result-stat {
+  display: block;
+  margin: 0.35rem 0;
+  font-size: 1.05rem;
+}
+
 .canvas-game-view-result-actions {
   display: flex;
   flex-direction: column;

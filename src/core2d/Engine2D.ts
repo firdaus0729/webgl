@@ -20,6 +20,9 @@ export interface ModeServices {
   getCountdownRemaining?(): number;
   /** Optional: round info for best-of style modes */
   getRoundInfo?(): { round: number; targetWins: number; score: { player: number; opponent: number } };
+  /** Optional: stamina for boxing (current, max) */
+  getPlayerStamina?(): { current: number; max: number };
+  getOpponentStamina?(): { current: number; max: number };
 }
 
 export interface GameMode {
@@ -175,6 +178,7 @@ export class Engine2D {
         viewHeight: VIEW_HEIGHT,
         canvasWidth: this.canvas.width,
         canvasHeight: this.canvas.height,
+        modeId: this.mode.id,
       };
       renderSystem(this.world, renderCtx);
     }

@@ -7,7 +7,7 @@ export interface Time {
   elapsed: number;
 }
 
-export type GameModeId = 'boxing' | 'topdown_arena' | 'endless_runner' | 'grid_board';
+export type GameModeId = 'boxing' | 'platformer' | 'topdown_arena' | 'endless_runner' | 'grid_board';
 
 export type EntityId = number;
 
