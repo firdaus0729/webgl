@@ -1,9 +1,11 @@
+import "./loadEnv";
 import express, { type Request, Response, NextFunction } from "express";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
 import { insertUserSchema } from "@shared/schema";
+import { generateGameConfigFromPrompt } from "./generateGameConfig";
 
 declare module "http" {
   interface IncomingMessage {
@@ -124,6 +126,37 @@ app.use((req, res, next) => {
       next(err);
     }
   });
+
+  app.post(
+    "/api/generate-config",
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const prompt =
+          typeof req.body?.prompt === "string" ? req.body.prompt : "";
+        if (!prompt.trim()) {
+          return res.status(400).json({ message: "Missing prompt" });
+        }
+
+        const hint = req.body?.moduleHint;
+        const combined =
+          hint !== undefined &&
+          hint !== null &&
+          typeof hint === "object" &&
+          !Array.isArray(hint)
+            ? `Player request:\n${prompt}\n\nOptional UI module hints (soft suggestions only; prefer the request above):\n${JSON.stringify(hint)}`
+            : prompt;
+
+        const config = await generateGameConfigFromPrompt(combined);
+        return res.status(200).json({ config });
+      } catch (err: any) {
+        const status = err.status || err.statusCode;
+        if (typeof status === "number" && status >= 400 && status < 600) {
+          return res.status(status).json({ message: err.message || "Error" });
+        }
+        next(err);
+      }
+    },
+  );
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

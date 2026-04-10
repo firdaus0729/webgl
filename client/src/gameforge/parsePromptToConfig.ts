@@ -31,18 +31,32 @@ export function parsePromptToConfig(prompt: string): GameConfig {
   let platformDensity: PlatformDensity = 'medium'
   let levelSize: LevelSize = 'medium'
 
-  // gameType
+  // gameType (three modes — must match `GameConfig` + Phaser scene routing)
   if (
     containsAny(text, [
-      'shooter',
-      'top-down',
-      'top down',
+      'top-down arena',
+      'top down arena',
+      'arena mode',
       'twin stick',
       'twin-stick',
-      'bullet hell',
+      'survivor io',
+      'survivor.io',
     ])
   ) {
-    gameType = 'shooter'
+    gameType = 'top_down_arena'
+  } else if (
+    containsAny(text, [
+      'retro shooter',
+      'vertical shooter',
+      'shmup',
+      'space shooter',
+      'galaga',
+      'gradius',
+      'bullet hell',
+      'shooter',
+    ])
+  ) {
+    gameType = 'retro_shooter'
   }
 
   // theme

@@ -1,6 +1,13 @@
 import { useEffect, useRef } from 'react'
 
-import { mountGameFromPrompt, type GameMount } from '@/gameforge/createGameInstance'
+import {
+  mountGameFromConfig,
+  mountGameFromPrompt,
+  type GameMount,
+} from '@/gameforge/createGameInstance'
+import type { GameConfig } from '@/gameforge/GameConfig'
+import { generateGameConfigFromAI } from '@/gameforge/llmGenerateConfig'
+import { isValidGameConfig } from '@/gameforge/validateGameConfig'
 
 function findPromptInput(): HTMLInputElement | null {
   return document.querySelector(
@@ -22,6 +29,7 @@ export default function GameOverlayController() {
     const onClick = () => {
       const input = findPromptInput()
       const prompt = typeof input?.value === 'string' ? input.value : ''
+      const moduleHint = parseGameConfigFromInput(input)
 
       const existing = overlayElRef.current
       if (existing) {
@@ -91,8 +99,27 @@ export default function GameOverlayController() {
       window.addEventListener('keydown', onEsc)
 
       const host = stage
-      mounted = mountGameFromPrompt(prompt, host)
-      mountRef.current = mounted
+
+      const loading = document.createElement('div')
+      loading.textContent = 'Generating game…'
+      loading.style.cssText =
+        'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;font-size:1.25rem;color:#e8e8f0;background:#0a0a12;z-index:2;'
+      stage.appendChild(loading)
+
+      void (async () => {
+        try {
+          const aiConfig = await generateGameConfigFromAI(prompt, moduleHint)
+          loading.remove()
+          mounted = mountGameFromConfig(aiConfig, host)
+          mountRef.current = mounted
+        } catch {
+          loading.remove()
+          mounted = moduleHint
+            ? mountGameFromConfig(moduleHint, host)
+            : mountGameFromPrompt(prompt, host)
+          mountRef.current = mounted
+        }
+      })()
     }
 
     let boundBtn: HTMLButtonElement | null = null
@@ -126,6 +153,17 @@ export default function GameOverlayController() {
   }, [])
 
   return null
+}
+
+function parseGameConfigFromInput(input: HTMLInputElement | null): GameConfig | null {
+  const raw = input?.dataset?.gameConfig
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return isValidGameConfig(parsed) ? parsed : null
+  } catch {
+    return null
+  }
 }
 
 function overlayRefFix(overlay: HTMLDivElement) {

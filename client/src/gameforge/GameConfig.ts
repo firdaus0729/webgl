@@ -1,4 +1,5 @@
-export type GameType = 'platformer' | 'shooter'
+/** Matches Home game-type chips + deterministic fallbacks when AI is unavailable. */
+export type GameType = 'platformer' | 'top_down_arena' | 'retro_shooter'
 export type Theme = 'cyberpunk' | 'forest' | 'desert' | 'cartoon'
 export type Difficulty = 'easy' | 'medium' | 'hard'
 export type EnemyType = 'drones' | 'aliens' | 'robots'

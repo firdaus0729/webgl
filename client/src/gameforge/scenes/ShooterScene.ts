@@ -37,6 +37,7 @@ export default class ShooterScene extends Phaser.Scene {
   private restartListenerAdded = false
   private restartKey!: Phaser.Input.Keyboard.Key
   private restartKeyHeld = false
+  private hudBannerLine = ''
   private onGlobalRestartKeyDown = (_e: KeyboardEvent) => {}
   private onGlobalRestartKeyUp = (_e: KeyboardEvent) => {}
   private readonly restartCaptureOptions = true
@@ -57,7 +58,7 @@ export default class ShooterScene extends Phaser.Scene {
     this.lastShotAt = 0
 
     const cfg = this.configData ?? {
-      gameType: 'shooter',
+      gameType: 'retro_shooter' as const,
       theme: 'cyberpunk',
       difficulty: 'medium',
       enemyType: 'drones',
@@ -368,13 +369,14 @@ export default class ShooterScene extends Phaser.Scene {
       .setScrollFactor(0)
 
     this.updateHudText(
-      `NEON SHOOTER // ${cfg.theme.toUpperCase()} // ${cfg.difficulty.toUpperCase()}`,
+      `RETRO SHOOTER // ${cfg.theme.toUpperCase()} // ${cfg.difficulty.toUpperCase()}`,
     )
   }
 
   private updateHudText(modeLabel?: string) {
     if (!this.hudText) return
-    const label = modeLabel ? `${modeLabel}\n` : ''
+    if (modeLabel) this.hudBannerLine = modeLabel
+    const label = this.hudBannerLine ? `${this.hudBannerLine}\n` : ''
     const hpNorm = Phaser.Math.Clamp(this.hp / 100, 0, 1)
     const clearNorm =
       1 -

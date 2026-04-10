@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 
 import MainScene from './scenes/MainScene'
 import ShooterScene from './scenes/ShooterScene'
+import TopDownArenaScene from './scenes/TopDownArenaScene'
 import type { GameConfig } from './GameConfig'
 import type { PlatformerTemplateConfig } from './config'
 import { buildPlatformerTemplateFromConfig } from './buildPlatformerTemplateFromConfig'
@@ -15,10 +16,7 @@ function getTemplateFromConfig(config: GameConfig): PlatformerTemplateConfig {
   return buildPlatformerTemplateFromConfig(config)
 }
 
-export function mountGameFromPrompt(prompt: string, host: HTMLElement): GameMount {
-  const cleanedPrompt = (prompt ?? '').trim() || 'A classic platformer'
-  const gameConfig = parsePromptToConfig(cleanedPrompt)
-
+function mountGame(gameConfig: GameConfig, host: HTMLElement): GameMount {
   const template = getTemplateFromConfig(gameConfig)
 
   host.tabIndex = 0
@@ -54,8 +52,14 @@ export function mountGameFromPrompt(prompt: string, host: HTMLElement): GameMoun
 
   game.scene.add('MainScene', MainScene, false)
   game.scene.add('ShooterScene', ShooterScene, false)
+  game.scene.add('TopDownArenaScene', TopDownArenaScene, false)
 
-  const sceneKey = gameConfig.gameType === 'shooter' ? 'ShooterScene' : 'MainScene'
+  const sceneKey =
+    gameConfig.gameType === 'top_down_arena'
+      ? 'TopDownArenaScene'
+      : gameConfig.gameType === 'retro_shooter'
+        ? 'ShooterScene'
+        : 'MainScene'
   game.scene.start(sceneKey, { config: gameConfig })
 
   window.setTimeout(() => host.focus(), 0)
@@ -115,5 +119,15 @@ export function mountGameFromPrompt(prompt: string, host: HTMLElement): GameMoun
       game.destroy(true)
     },
   }
+}
+
+export function mountGameFromPrompt(prompt: string, host: HTMLElement): GameMount {
+  const cleanedPrompt = (prompt ?? '').trim() || 'A classic platformer'
+  const gameConfig = parsePromptToConfig(cleanedPrompt)
+  return mountGame(gameConfig, host)
+}
+
+export function mountGameFromConfig(config: GameConfig, host: HTMLElement): GameMount {
+  return mountGame(config, host)
 }
 

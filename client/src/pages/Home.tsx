@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,7 @@ import iconAi from "@/assets/images/icon-trueplay.png";
 import iconShield from "@/assets/images/icon-gaca.png";
 
 import boxingVideo from "@/assets/videos/ps2-boxing-indoor.mp4";
+import type { GameConfig } from "@/gameforge/GameConfig";
 
 const generatedGames = [
   { img: gameNinja, title: "Shinobi's Vow", genre: "Platformer", likes: 12.4 },
@@ -43,23 +45,136 @@ const activityStream = [
   { action: "Created", target: "Shinobi's Vow", time: "18m ago" },
 ];
 
-const promptExamples = [
-  'Cyberpunk rooftop shooter with fast drones, hard mode, dense enemy waves',
-  'Forest platformer with robots, medium difficulty, long level with many platforms',
-  'Desert arcade shooter with aliens, easy mode, short session but high action',
-  'Cartoon platformer for kids with low enemies and colorful jumping routes',
-];
-
-  const onPromptExampleClick = (prompt: string) => {
-    const input = document.querySelector(
-      'input[placeholder="Describe the game you want to build..."]',
-    ) as HTMLInputElement | null
-    if (!input) return
-    input.value = prompt
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-  }
+const MODULE_OPTIONS = {
+  gameType: ["platformer", "top-down arena", "retro shooter"],
+  difficulty: ["easy", "medium", "hard"],
+  movement: ["run and jump", "run + double jump", "8-direction move", "dash + jump"],
+  interaction: ["collect items", "collide with enemies", "shoot enemies", "activate switches"],
+  behavior: ["patrol guards", "follow when near", "stationary turrets", "wave spawns"],
+  rules: ["score + lives", "score + timer", "collect all relics", "survive waves"],
+  visualStyle: ["pixel art", "8-bit retro", "16-bit retro", "cartoon retro"],
+  audio: ["simple chiptune", "retro arcade loop", "minimal SFX", "chiptune + SFX"],
+} as const;
 
 export default function Home() {
+  const [gameType, setGameType] = useState<string>(MODULE_OPTIONS.gameType[0]);
+  const [difficulty, setDifficulty] = useState<string>(MODULE_OPTIONS.difficulty[1]);
+  const [movement, setMovement] = useState<string>(MODULE_OPTIONS.movement[0]);
+  const [interaction, setInteraction] = useState<string>(MODULE_OPTIONS.interaction[0]);
+  const [behavior, setBehavior] = useState<string>(MODULE_OPTIONS.behavior[0]);
+  const [rules, setRules] = useState<string>(MODULE_OPTIONS.rules[0]);
+  const [visualStyle, setVisualStyle] = useState<string>(MODULE_OPTIONS.visualStyle[0]);
+  const [audio, setAudio] = useState<string>(MODULE_OPTIONS.audio[0]);
+
+  const segmentedPrompt = useMemo(() => {
+    return [
+      gameType,
+      difficulty,
+      `with ${movement}`,
+      `where players ${interaction}`,
+      `enemies use ${behavior}`,
+      `rules: ${rules}`,
+      `visual style: ${visualStyle}`,
+      `audio: ${audio}`,
+    ].join(", ");
+  }, [audio, behavior, difficulty, gameType, interaction, movement, rules, visualStyle]);
+
+  const directGameConfig = useMemo<GameConfig>(() => {
+    const moduleToGameType = (): GameConfig["gameType"] => {
+      if (gameType === "top-down arena") return "top_down_arena";
+      if (gameType === "retro shooter") return "retro_shooter";
+      return "platformer";
+    };
+
+    const isShooter = gameType === "top-down arena" || gameType === "retro shooter";
+
+    const theme: GameConfig["theme"] =
+      visualStyle === "pixel art" || visualStyle === "8-bit retro"
+        ? "cartoon"
+        : visualStyle === "16-bit retro"
+          ? "forest"
+          : "cyberpunk";
+
+    const enemyType: GameConfig["enemyType"] =
+      behavior === "stationary turrets"
+        ? "robots"
+        : behavior === "wave spawns"
+          ? "aliens"
+          : behavior === "patrol guards"
+            ? "drones"
+            : "robots";
+
+    const difficultyValue: GameConfig["difficulty"] =
+      difficulty === "easy" ? "easy" : difficulty === "hard" ? "hard" : "medium";
+
+    const enemyDensity: GameConfig["enemyDensity"] =
+      interaction === "collect items"
+        ? "low"
+        : interaction === "collide with enemies"
+          ? "medium"
+          : interaction === "shoot enemies"
+            ? "high"
+            : "medium";
+
+    const platformDensity: GameConfig["platformDensity"] =
+      movement === "run + double jump"
+        ? "high"
+        : movement === "dash + jump"
+          ? "medium"
+          : movement === "run and jump"
+            ? "medium"
+            : isShooter
+              ? "low"
+              : "medium";
+
+    const levelSize: GameConfig["levelSize"] =
+      rules === "score + timer"
+        ? "small"
+        : rules === "survive waves"
+          ? "large"
+          : "medium";
+
+    return {
+      gameType: moduleToGameType(),
+      theme,
+      difficulty: difficultyValue,
+      enemyType,
+      enemyDensity,
+      platformDensity,
+      levelSize,
+    };
+  }, [behavior, difficulty, gameType, interaction, movement, rules, visualStyle]);
+
+  const renderModuleRow = (
+    label: string,
+    options: readonly string[],
+    selected: string,
+    onPick: (value: string) => void,
+  ) => (
+    <div className="w-full">
+      <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2 text-left">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => {
+              onPick(option);
+            }}
+            className={[
+              "text-xs px-3 py-1.5 rounded-full border transition-all",
+              selected === option
+                ? "bg-primary/20 border-primary/60 text-primary-foreground"
+                : "bg-secondary/10 border-secondary/20 text-secondary-foreground hover:bg-secondary/20 hover:border-secondary/40",
+            ].join(" ")}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-20 pb-10">
       {/* Hero Section */}
@@ -109,6 +224,9 @@ export default function Home() {
                   <div className="relative flex-1 w-full">
                     <Terminal className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-primary/70" />
                     <Input 
+                      value={segmentedPrompt}
+                      readOnly
+                      data-game-config={JSON.stringify(directGameConfig)}
                       placeholder="Describe the game you want to build..." 
                       className="pl-14 h-16 bg-transparent border-none text-xl focus-visible:ring-0 shadow-none placeholder:text-muted-foreground/60"
                     />
@@ -119,17 +237,18 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Example Prompts */}
-              <div className="flex flex-wrap justify-center gap-3 pt-6 relative z-10 pb-4">
-                {promptExamples.map((prompt, idx) => (
-                  <button 
-                    key={idx}
-                    className="text-sm px-4 py-2 rounded-full bg-secondary/10 border border-secondary/20 text-secondary-foreground hover:bg-secondary/20 hover:border-secondary/40 transition-all backdrop-blur-sm shadow-sm"
-                    onClick={() => onPromptExampleClick(prompt)}
-                  >
-                    "{prompt}"
-                  </button>
-                ))}
+              <div className="mt-2 rounded-xl border border-white/10 bg-background/40 p-4 space-y-3">
+                <p className="text-sm text-left text-muted-foreground">
+                  Build prompt by modules (retro-first generation pipeline):
+                </p>
+                {renderModuleRow("Game Type", MODULE_OPTIONS.gameType, gameType, setGameType)}
+                {renderModuleRow("Difficulty", MODULE_OPTIONS.difficulty, difficulty, setDifficulty)}
+                {renderModuleRow("Movement", MODULE_OPTIONS.movement, movement, setMovement)}
+                {renderModuleRow("Interaction", MODULE_OPTIONS.interaction, interaction, setInteraction)}
+                {renderModuleRow("Behavior", MODULE_OPTIONS.behavior, behavior, setBehavior)}
+                {renderModuleRow("Rules", MODULE_OPTIONS.rules, rules, setRules)}
+                {renderModuleRow("Visual Style", MODULE_OPTIONS.visualStyle, visualStyle, setVisualStyle)}
+                {renderModuleRow("Audio", MODULE_OPTIONS.audio, audio, setAudio)}
               </div>
             </div>
           </div>

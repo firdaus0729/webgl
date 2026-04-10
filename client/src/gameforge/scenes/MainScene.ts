@@ -43,12 +43,20 @@ export default class MainScene extends Phaser.Scene {
   private onGlobalRestartKeyDown = (_e: KeyboardEvent) => {}
   private onGlobalRestartKeyUp = (_e: KeyboardEvent) => {}
   private readonly restartCaptureOptions = true
+  private storedConfig: GameConfig | null = null
 
   constructor() {
     super('MainScene')
   }
 
+  private restartPayload() {
+    return this.storedConfig
+      ? { config: this.storedConfig }
+      : { template: this.baseTemplate }
+  }
+
   init(data?: { template?: PlatformerTemplateConfig; config?: GameConfig }) {
+    this.storedConfig = data?.config ?? null
     this.baseTemplate = data?.config
       ? buildPlatformerTemplateFromConfig(data.config)
       : data?.template ?? PLATFORMER_TEMPLATE_CONFIG
@@ -95,7 +103,7 @@ export default class MainScene extends Phaser.Scene {
       // Prevent multiple restarts from key auto-repeat.
       if (this.restartKeyHeld) return
       this.restartKeyHeld = true
-      this.scene.restart({ template: this.baseTemplate })
+      this.scene.restart(this.restartPayload())
     }
     this.onGlobalRestartKeyUp = (e: KeyboardEvent) => {
       const isR = e.code === 'KeyR' || e.key === 'r' || e.key === 'R'
@@ -123,7 +131,7 @@ export default class MainScene extends Phaser.Scene {
       // Restart reliability: allow both R press and R-hold after win/lose.
       const isDown = this.restartKey?.isDown === true
       if (isDown && !this.restartKeyHeld) {
-        this.scene.restart({ template: this.baseTemplate })
+        this.scene.restart(this.restartPayload())
       }
       this.restartKeyHeld = isDown
       return
