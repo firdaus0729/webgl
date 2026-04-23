@@ -1,8 +1,10 @@
 import type { GameConfig } from './GameConfig'
-import type { PlatformerTemplateConfig } from './config'
+import type { PlatformerTemplateConfig, SessionVisualVariant } from './config'
 import { PLATFORMER_TEMPLATE_CONFIG } from './config'
 import {
+  floatBetween,
   hashStringToUint32,
+  intBetween,
   mulberry32,
   rngFromString,
 } from './sessionSeed'
@@ -98,13 +100,40 @@ const PhaserMathLike = {
 function sessionPhysicsVariance(sessionSeed: string) {
   const rng = rngFromString(`${sessionSeed}|phys`)
   return {
-    gravityMul: PhaserMathLike.clamp(0.93 + rng() * 0.14, 0.88, 1.06),
-    moveMul: PhaserMathLike.clamp(0.94 + rng() * 0.12, 0.9, 1.08),
-    jumpMul: PhaserMathLike.clamp(0.94 + rng() * 0.12, 0.9, 1.08),
-    enemySpeedMul: PhaserMathLike.clamp(0.9 + rng() * 0.2, 0.85, 1.12),
-    chaseDistMul: PhaserMathLike.clamp(0.92 + rng() * 0.18, 0.88, 1.1),
-    cameraLerpMul: PhaserMathLike.clamp(0.85 + rng() * 0.35, 0.75, 1.25),
-    spawnXJitter: (rng() - 0.5) * 0.14,
+    gravityMul: PhaserMathLike.clamp(0.78 + rng() * 0.34, 0.72, 1.18),
+    moveMul: PhaserMathLike.clamp(0.78 + rng() * 0.32, 0.72, 1.2),
+    jumpMul: PhaserMathLike.clamp(0.78 + rng() * 0.32, 0.72, 1.2),
+    enemySpeedMul: PhaserMathLike.clamp(0.75 + rng() * 0.4, 0.68, 1.25),
+    chaseDistMul: PhaserMathLike.clamp(0.78 + rng() * 0.32, 0.7, 1.2),
+    cameraLerpMul: PhaserMathLike.clamp(0.62 + rng() * 0.65, 0.48, 1.55),
+    spawnXJitter: (rng() - 0.5) * 0.24,
+  }
+}
+
+function bridgeCountWithSession(game: GameConfig, sessionSeed: string): number {
+  const base = bridgeCountByDifficulty(game)
+  const delta = intBetween(rngFromString(`${sessionSeed}|bridgeN`), -2, 5)
+  return PhaserMathLike.clamp(base + delta, 8, 28)
+}
+
+function buildSessionVisualVariant(sessionSeed: string): SessionVisualVariant {
+  const b = (k: string) => rngFromString(`${sessionSeed}|sv|${k}`)
+  return {
+    skyStarCount: intBetween(b('stars'), 65, 220),
+    parallaxBack: floatBetween(b('pb'), 0.032, 0.1),
+    parallaxMid: floatBetween(b('pm'), 0.075, 0.175),
+    parallaxFront: floatBetween(b('pf'), 0.12, 0.3),
+    skyBackAlpha: floatBetween(b('ab'), 0.3, 0.62),
+    skyMidAlpha: floatBetween(b('am'), 0.12, 0.36),
+    skyFrontAlpha: floatBetween(b('af'), 0.06, 0.24),
+    relicScore: intBetween(b('rel'), 80, 165),
+    enemyDestroyScore: intBetween(b('kill'), 130, 245),
+    bulletCooldownMs: intBetween(b('bcd'), 118, 228),
+    bulletSpeedX: intBetween(b('bv'), 500, 780),
+    shooterStarCount: intBetween(b('sst'), 72, 175),
+    shooterPlayerXRatio: floatBetween(b('spx'), -0.16, 0.16),
+    arenaKillTargetMul: floatBetween(b('akt'), 0.78, 1.22),
+    arenaPlayerSpeedMul: floatBetween(b('aps'), 0.84, 1.18),
   }
 }
 
@@ -121,7 +150,7 @@ function generateFloatingPlatforms(game: GameConfig, sessionSeed: string) {
   ].join('|')
   const rng = mulberry32(hashStringToUint32(seedStr))
 
-  const totalBridges = bridgeCountByDifficulty(game)
+  const totalBridges = bridgeCountWithSession(game, sessionSeed)
   const scaleBase =
     game.platformDensity === 'high' ? 0.92 : game.platformDensity === 'low' ? 1.02 : 0.98
   const lowY = 86 / 540
@@ -142,10 +171,10 @@ function generateFloatingPlatforms(game: GameConfig, sessionSeed: string) {
   const platforms: Array<{ xRatio: number; yAboveGroundRatio: number; scaleX: number }> = []
   for (let i = 0; i < clusters; i++) {
     const t = clusters === 1 ? 0.5 : i / (clusters - 1)
-    const centerX = PhaserMathLike.clamp(0.09 + t * 0.82 + (rng() - 0.5) * 0.02, 0.09, 0.91)
+    const centerX = PhaserMathLike.clamp(0.09 + t * 0.82 + (rng() - 0.5) * 0.055, 0.08, 0.92)
     const form = forms[i]
     const stepX = 0.055
-    const noiseY = (rng() - 0.5) * (6 / 540)
+    const noiseY = (rng() - 0.5) * (14 / 540)
 
     platforms.push({
       xRatio: PhaserMathLike.clamp(centerX - (form - 1) * stepX * 0.5, 0.08, 0.92),
@@ -173,7 +202,22 @@ function generateFloatingPlatforms(game: GameConfig, sessionSeed: string) {
       ? a.yAboveGroundRatio - b.yAboveGroundRatio
       : a.xRatio - b.xRatio,
   )
-  return platforms.slice(0, totalBridges)
+  const sliced = platforms.slice(0, totalBridges)
+  return sliced.map((p, idx) => {
+    const rx = rngFromString(`${sessionSeed}|platx|${idx}`)
+    const ry = rngFromString(`${sessionSeed}|platy|${idx}`)
+    const rs = rngFromString(`${sessionSeed}|plats|${idx}`)
+    return {
+      ...p,
+      xRatio: PhaserMathLike.clamp(p.xRatio + (rx() - 0.5) * 0.1, 0.05, 0.95),
+      yAboveGroundRatio: PhaserMathLike.clamp(
+        p.yAboveGroundRatio + (ry() - 0.5) * (22 / 540),
+        0.04,
+        0.48,
+      ),
+      scaleX: PhaserMathLike.clamp(p.scaleX + (rs() - 0.5) * 0.18, 0.68, 1.32),
+    }
+  })
 }
 
 function generateEnemySpawns(
@@ -258,42 +302,72 @@ export function buildPlatformerTemplateFromConfig(
     }
   })
 
-  const gravityY = PhaserMathLike.clamp(diff.gravityY * phys.gravityMul, 780, 1680)
-  const moveSpeed = PhaserMathLike.clamp(diff.moveSpeed * phys.moveMul, 195, 315)
-  const jumpSpeed = PhaserMathLike.clamp(diff.jumpSpeed * phys.jumpMul, 405, 595)
+  const gravityY = PhaserMathLike.clamp(diff.gravityY * phys.gravityMul, 720, 1750)
+  const moveSpeed = PhaserMathLike.clamp(diff.moveSpeed * phys.moveMul, 175, 335)
+  const jumpSpeed = PhaserMathLike.clamp(diff.jumpSpeed * phys.jumpMul, 380, 620)
   const enemySpeed = PhaserMathLike.clamp(
     enemyGenerated.enemyTuning.speed * phys.enemySpeedMul,
-    78,
-    168,
+    68,
+    178,
   )
   const chaseDistance = PhaserMathLike.clamp(
     enemyGenerated.enemyTuning.chaseDistance * phys.chaseDistMul,
-    155,
-    295,
+    140,
+    310,
   )
   const spawnXRatio = PhaserMathLike.clamp(
     base.player.spawnXRatio + phys.spawnXJitter,
-    0.12,
-    0.38,
+    0.1,
+    0.42,
   )
   const followLerp = PhaserMathLike.clamp(
     base.camera.followLerp * phys.cameraLerpMul,
-    0.045,
-    0.2,
+    0.04,
+    0.22,
   )
+
+  const widthScale = PhaserMathLike.clamp(
+    size.widthScale * floatBetween(rngFromString(`${sessionSeed}|wsc`), 0.88, 1.18),
+    1.02,
+    2.65,
+  )
+  const groundYOffsetRatio = PhaserMathLike.clamp(
+    base.world.groundYOffsetRatio *
+      floatBetween(rngFromString(`${sessionSeed}|gnd`), 0.86, 1.14),
+    0.056,
+    0.115,
+  )
+  const playerScale = PhaserMathLike.clamp(
+    base.player.scale * floatBetween(rngFromString(`${sessionSeed}|psc`), 0.82, 1.15),
+    0.74,
+    1.12,
+  )
+  const spawnBottomOffsetRatio = PhaserMathLike.clamp(
+    base.player.spawnBottomOffsetRatio *
+      floatBetween(rngFromString(`${sessionSeed}|spb`), 0.88, 1.12),
+    0.22,
+    0.34,
+  )
+
+  const sessionVariant = buildSessionVisualVariant(sessionSeed)
 
   return {
     ...base,
+    sessionSeed,
+    sessionVariant,
     world: {
       ...base.world,
-      widthScale: size.widthScale,
+      widthScale,
       gravityY,
+      groundYOffsetRatio,
     },
     player: {
       ...base.player,
       moveSpeed,
       jumpSpeed,
       spawnXRatio,
+      scale: playerScale,
+      spawnBottomOffsetRatio,
     },
     platforms: {
       ...base.platforms,

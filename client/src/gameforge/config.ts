@@ -8,6 +8,26 @@ import type {
   Theme,
 } from './GameConfig'
 
+/** Per-session presentation and scoring (from `sessionSeed` in the builder). */
+export type SessionVisualVariant = {
+  skyStarCount: number
+  parallaxBack: number
+  parallaxMid: number
+  parallaxFront: number
+  skyBackAlpha: number
+  skyMidAlpha: number
+  skyFrontAlpha: number
+  relicScore: number
+  enemyDestroyScore: number
+  bulletCooldownMs: number
+  bulletSpeedX: number
+  shooterStarCount: number
+  /** Horizontal drift as ratio of view width from center (e.g. -0.1 = left). */
+  shooterPlayerXRatio: number
+  arenaKillTargetMul: number
+  arenaPlayerSpeedMul: number
+}
+
 export type PlatformerTemplateConfig = {
   world: {
     widthScale: number
@@ -66,6 +86,9 @@ export type PlatformerTemplateConfig = {
     platformFill: number
     platformStroke: number
   }
+  /** Set when built via `buildPlatformerTemplateFromConfig` (client-side procedural runs). */
+  sessionSeed?: string
+  sessionVariant?: SessionVisualVariant
 }
 
 // Default template config for the MVP platformer.

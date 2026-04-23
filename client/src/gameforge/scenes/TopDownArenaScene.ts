@@ -50,6 +50,7 @@ export default class TopDownArenaScene extends Phaser.Scene {
   private lastPlayerHitAt = 0
   private hudBannerLine = ''
   private sessionSeed = ''
+  private arenaMoveMul = 1
 
   constructor() {
     super('TopDownArenaScene')
@@ -84,6 +85,7 @@ export default class TopDownArenaScene extends Phaser.Scene {
     this.configData = cfg
     if (!this.sessionSeed) this.sessionSeed = createSessionSeed()
     const template = buildPlatformerTemplateFromConfig(cfg, this.sessionSeed)
+    this.arenaMoveMul = template.sessionVariant?.arenaPlayerSpeedMul ?? 1
 
     this.cameras.main.setBackgroundColor(template.theme.backgroundColor)
     this.cursors = this.input.keyboard!.createCursorKeys()
@@ -115,7 +117,7 @@ export default class TopDownArenaScene extends Phaser.Scene {
     this.drawArena(template.theme.platformStroke)
     this.createPlayer()
     this.createPools()
-    this.computeWaveTargets(cfg)
+    this.computeWaveTargets(cfg, template.sessionVariant?.arenaKillTargetMul ?? 1)
     this.spawnWave(cfg)
     this.registerCollisions()
     this.createHud(cfg)
@@ -127,12 +129,12 @@ export default class TopDownArenaScene extends Phaser.Scene {
     })
   }
 
-  private computeWaveTargets(cfg: GameConfig) {
+  private computeWaveTargets(cfg: GameConfig, killMul: number) {
     const base =
       cfg.enemyDensity === 'low' ? 10 : cfg.enemyDensity === 'high' ? 24 : 16
     const scaled =
       cfg.levelSize === 'large' ? base + 6 : cfg.levelSize === 'small' ? Math.max(6, base - 4) : base
-    this.targetKills = scaled
+    this.targetKills = Math.max(6, Math.round(scaled * killMul))
   }
 
   private spawnWave(cfg: GameConfig) {
@@ -193,7 +195,7 @@ export default class TopDownArenaScene extends Phaser.Scene {
     }
     if (this.paused) return
 
-    const speed = 300
+    const speed = 300 * this.arenaMoveMul
     const leftDown =
       Number(this.cursors.left.isDown) +
       Number(this.leftKey.isDown) +

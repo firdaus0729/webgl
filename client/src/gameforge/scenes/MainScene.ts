@@ -6,7 +6,7 @@ import {
 } from '../config'
 import type { GameConfig } from '../GameConfig'
 import { buildPlatformerTemplateFromConfig } from '../buildPlatformerTemplateFromConfig'
-import { createSessionSeed } from '../sessionSeed'
+import { createSessionSeed, floatBetween, intBetween, rngFromString } from '../sessionSeed'
 import Player from '../objects/Player'
 import Enemy from '../objects/Enemy'
 import { attachGlobalInput, detachGlobalInput, isCodeDown } from '../inputState'
@@ -269,28 +269,42 @@ export default class MainScene extends Phaser.Scene {
   }
 
   private drawSkyArt(worldWidth: number, h: number) {
+    const v = this.template.sessionVariant
     const back = this.add
       .tileSprite(worldWidth / 2, h / 2, worldWidth, h, '__WHITE')
       .setTint(0x0f1222)
-      .setAlpha(0.5)
+      .setAlpha(v?.skyBackAlpha ?? 0.5)
     const mid = this.add
       .tileSprite(worldWidth / 2, h / 2, worldWidth, h, '__WHITE')
       .setTint(0x1d2e4a)
-      .setAlpha(0.23)
+      .setAlpha(v?.skyMidAlpha ?? 0.23)
     const front = this.add
       .tileSprite(worldWidth / 2, h / 2, worldWidth, h, '__WHITE')
       .setTint(0x3a5a78)
-      .setAlpha(0.14)
+      .setAlpha(v?.skyFrontAlpha ?? 0.14)
     this.skyLayers = [back, mid, front]
 
-    for (let i = 0; i < 140; i++) {
-      this.add.circle(
-        Phaser.Math.Between(0, worldWidth),
-        Phaser.Math.Between(0, h - 100),
-        Phaser.Math.Between(1, 2),
-        0xffffff,
-        Phaser.Math.FloatBetween(0.12, 0.7),
-      )
+    const starCount = v?.skyStarCount ?? 140
+    const seed = this.template.sessionSeed
+    for (let i = 0; i < starCount; i++) {
+      if (seed) {
+        const rng = rngFromString(`${seed}|sky|${i}`)
+        this.add.circle(
+          intBetween(rng, 0, worldWidth),
+          intBetween(rng, 0, h - 100),
+          intBetween(rng, 1, 2),
+          0xffffff,
+          floatBetween(rng, 0.08, 0.78),
+        )
+      } else {
+        this.add.circle(
+          Phaser.Math.Between(0, worldWidth),
+          Phaser.Math.Between(0, h - 100),
+          Phaser.Math.Between(1, 2),
+          0xffffff,
+          Phaser.Math.FloatBetween(0.12, 0.7),
+        )
+      }
     }
   }
 
@@ -366,14 +380,14 @@ export default class MainScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.relics, (_player, token) => {
       ;(token as Phaser.Physics.Arcade.Image).disableBody(true, true)
       this.remainingRelics = Math.max(0, this.remainingRelics - 1)
-      this.score += 120
+      this.score += this.template.sessionVariant?.relicScore ?? 120
     })
 
     this.physics.add.overlap(this.bullets, this.enemies, (b, e) => {
       ;(b as Phaser.Physics.Arcade.Image).disableBody(true, true)
       ;(e as Enemy).destroy()
       this.enemies = this.enemies.filter((x) => x.active)
-      this.score += 180
+      this.score += this.template.sessionVariant?.enemyDestroyScore ?? 180
     })
 
     this.physics.add.collider(this.player, this.enemies, () => {
@@ -386,7 +400,8 @@ export default class MainScene extends Phaser.Scene {
   }
 
   private tryShoot() {
-    if (!this.player || this.time.now - this.lastShotAt < 160) return
+    const cd = this.template.sessionVariant?.bulletCooldownMs ?? 160
+    if (!this.player || this.time.now - this.lastShotAt < cd) return
     this.lastShotAt = this.time.now
     const bullet = this.bullets.get(
       this.player.x,
@@ -396,7 +411,8 @@ export default class MainScene extends Phaser.Scene {
     if (!bullet) return
     bullet.enableBody(true, this.player.x, this.player.y - 2, true, true)
     bullet.setActive(true).setVisible(true).setDepth(7)
-    bullet.setVelocityX(this.player.flipX ? -640 : 640)
+    const vx = this.template.sessionVariant?.bulletSpeedX ?? 640
+    bullet.setVelocityX(this.player.flipX ? -vx : vx)
     this.time.delayedCall(1200, () => bullet.active && bullet.disableBody(true, true))
   }
 
@@ -472,9 +488,13 @@ export default class MainScene extends Phaser.Scene {
 
   private scrollBackground() {
     const sx = this.cameras.main.scrollX
-    if (this.skyLayers[0]) this.skyLayers[0].tilePositionX = sx * 0.06
-    if (this.skyLayers[1]) this.skyLayers[1].tilePositionX = sx * 0.12
-    if (this.skyLayers[2]) this.skyLayers[2].tilePositionX = sx * 0.2
+    const v = this.template.sessionVariant
+    const pb = v?.parallaxBack ?? 0.06
+    const pm = v?.parallaxMid ?? 0.12
+    const pf = v?.parallaxFront ?? 0.2
+    if (this.skyLayers[0]) this.skyLayers[0].tilePositionX = sx * pb
+    if (this.skyLayers[1]) this.skyLayers[1].tilePositionX = sx * pm
+    if (this.skyLayers[2]) this.skyLayers[2].tilePositionX = sx * pf
   }
 
   private checkResult() {

@@ -110,8 +110,11 @@ export default class ShooterScene extends Phaser.Scene {
     window.addEventListener('keyup', this.onGlobalRestartKeyUp, this.restartCaptureOptions)
 
     this.createTextures(template.theme.playerFill, template.theme.platformStroke)
-    this.createStarfield(this.starRng)
-    this.createPlayer()
+    this.createStarfield(
+      this.starRng,
+      template.sessionVariant?.shooterStarCount ?? 120,
+    )
+    this.createPlayer(template.sessionVariant?.shooterPlayerXRatio ?? 0)
     this.createPools()
     this.spawnEnemies(cfg)
     this.registerCollisions()
@@ -218,7 +221,7 @@ export default class ShooterScene extends Phaser.Scene {
     g.destroy()
   }
 
-  private createStarfield(rng: () => number) {
+  private createStarfield(rng: () => number, starCount: number) {
     this.stars = this.add.group()
     this.add.rectangle(
       this.scale.width / 2,
@@ -230,7 +233,7 @@ export default class ShooterScene extends Phaser.Scene {
     )
     this.add.circle(this.scale.width * 0.2, this.scale.height * 0.2, 90, 0x4b7cff, 0.15)
     this.add.circle(this.scale.width * 0.85, this.scale.height * 0.18, 120, 0xff4caa, 0.12)
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < starCount; i++) {
       const star = this.add.circle(
         intBetween(rng, 0, this.scale.width),
         intBetween(rng, 0, this.scale.height),
@@ -242,9 +245,10 @@ export default class ShooterScene extends Phaser.Scene {
     }
   }
 
-  private createPlayer() {
+  private createPlayer(xDriftRatio: number) {
+    const x = this.scale.width * (0.5 + xDriftRatio)
     this.player = this.physics.add.image(
-      this.scale.width / 2,
+      Phaser.Math.Clamp(x, 40, this.scale.width - 40),
       this.scale.height - 70,
       'shipPlayerTex',
     )

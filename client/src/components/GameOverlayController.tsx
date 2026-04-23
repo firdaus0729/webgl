@@ -7,6 +7,7 @@ import {
 } from '@/gameforge/createGameInstance'
 import type { GameConfig } from '@/gameforge/GameConfig'
 import { generateGameConfigFromAI } from '@/gameforge/llmGenerateConfig'
+import { logDeterministicGameConfigFallback } from '@/gameforge/logDeterministicFallback'
 import { isValidGameConfig } from '@/gameforge/validateGameConfig'
 
 function findPromptInput(): HTMLInputElement | null {
@@ -112,7 +113,8 @@ export default function GameOverlayController() {
           loading.remove()
           mounted = mountGameFromConfig(aiConfig, host)
           mountRef.current = mounted
-        } catch {
+        } catch (err) {
+          logDeterministicGameConfigFallback(err)
           loading.remove()
           mounted = moduleHint
             ? mountGameFromConfig(moduleHint, host)
