@@ -6,6 +6,7 @@ import {
 } from '../config'
 import type { GameConfig } from '../GameConfig'
 import { buildPlatformerTemplateFromConfig } from '../buildPlatformerTemplateFromConfig'
+import { createSessionSeed } from '../sessionSeed'
 import Player from '../objects/Player'
 import Enemy from '../objects/Enemy'
 import { attachGlobalInput, detachGlobalInput, isCodeDown } from '../inputState'
@@ -44,6 +45,7 @@ export default class MainScene extends Phaser.Scene {
   private onGlobalRestartKeyUp = (_e: KeyboardEvent) => {}
   private readonly restartCaptureOptions = true
   private storedConfig: GameConfig | null = null
+  private sessionSeed = ''
 
   constructor() {
     super('MainScene')
@@ -51,15 +53,23 @@ export default class MainScene extends Phaser.Scene {
 
   private restartPayload() {
     return this.storedConfig
-      ? { config: this.storedConfig }
+      ? { config: this.storedConfig, sessionSeed: this.sessionSeed }
       : { template: this.baseTemplate }
   }
 
-  init(data?: { template?: PlatformerTemplateConfig; config?: GameConfig }) {
+  init(data?: {
+    template?: PlatformerTemplateConfig
+    config?: GameConfig
+    sessionSeed?: string
+  }) {
     this.storedConfig = data?.config ?? null
-    this.baseTemplate = data?.config
-      ? buildPlatformerTemplateFromConfig(data.config)
-      : data?.template ?? PLATFORMER_TEMPLATE_CONFIG
+    if (data?.config) {
+      const seed = data.sessionSeed ?? (this.sessionSeed || createSessionSeed())
+      this.sessionSeed = seed
+      this.baseTemplate = buildPlatformerTemplateFromConfig(data.config, seed)
+    } else {
+      this.baseTemplate = data?.template ?? PLATFORMER_TEMPLATE_CONFIG
+    }
     this.template = this.baseTemplate
   }
 

@@ -4,20 +4,17 @@ import MainScene from './scenes/MainScene'
 import ShooterScene from './scenes/ShooterScene'
 import TopDownArenaScene from './scenes/TopDownArenaScene'
 import type { GameConfig } from './GameConfig'
-import type { PlatformerTemplateConfig } from './config'
 import { buildPlatformerTemplateFromConfig } from './buildPlatformerTemplateFromConfig'
 import { parsePromptToConfig } from './parsePromptToConfig'
+import { createSessionSeed } from './sessionSeed'
 
 export type GameMount = {
   destroy: () => void
 }
 
-function getTemplateFromConfig(config: GameConfig): PlatformerTemplateConfig {
-  return buildPlatformerTemplateFromConfig(config)
-}
-
 function mountGame(gameConfig: GameConfig, host: HTMLElement): GameMount {
-  const template = getTemplateFromConfig(gameConfig)
+  const sessionSeed = createSessionSeed()
+  const template = buildPlatformerTemplateFromConfig(gameConfig, sessionSeed)
 
   host.tabIndex = 0
   host.style.outline = 'none'
@@ -60,7 +57,7 @@ function mountGame(gameConfig: GameConfig, host: HTMLElement): GameMount {
       : gameConfig.gameType === 'retro_shooter'
         ? 'ShooterScene'
         : 'MainScene'
-  game.scene.start(sceneKey, { config: gameConfig })
+  game.scene.start(sceneKey, { config: gameConfig, sessionSeed })
 
   window.setTimeout(() => host.focus(), 0)
 

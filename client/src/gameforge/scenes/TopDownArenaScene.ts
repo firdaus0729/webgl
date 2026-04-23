@@ -3,6 +3,7 @@ import Phaser from 'phaser'
 import type { GameConfig } from '../GameConfig'
 import { buildPlatformerTemplateFromConfig } from '../buildPlatformerTemplateFromConfig'
 import { attachGlobalInput, detachGlobalInput, isCodeDown } from '../inputState'
+import { createSessionSeed, intBetween, rngFromString } from '../sessionSeed'
 
 type ArenaEnemy = Phaser.Physics.Arcade.Image & {
   hp: number
@@ -48,13 +49,15 @@ export default class TopDownArenaScene extends Phaser.Scene {
   private kills = 0
   private lastPlayerHitAt = 0
   private hudBannerLine = ''
+  private sessionSeed = ''
 
   constructor() {
     super('TopDownArenaScene')
   }
 
-  init(data?: { config?: GameConfig }) {
+  init(data?: { config?: GameConfig; sessionSeed?: string }) {
     this.configData = data?.config ?? null
+    if (data?.sessionSeed) this.sessionSeed = data.sessionSeed
   }
 
   create() {
@@ -79,7 +82,8 @@ export default class TopDownArenaScene extends Phaser.Scene {
       levelSize: 'medium',
     }
     this.configData = cfg
-    const template = buildPlatformerTemplateFromConfig(cfg)
+    if (!this.sessionSeed) this.sessionSeed = createSessionSeed()
+    const template = buildPlatformerTemplateFromConfig(cfg, this.sessionSeed)
 
     this.cameras.main.setBackgroundColor(template.theme.backgroundColor)
     this.cursors = this.input.keyboard!.createCursorKeys()
@@ -97,7 +101,7 @@ export default class TopDownArenaScene extends Phaser.Scene {
       if (!this.gameOver) return
       if (this.restartKeyHeld) return
       this.restartKeyHeld = true
-      this.scene.restart({ config: this.configData })
+      this.scene.restart({ config: this.configData, sessionSeed: this.sessionSeed })
     }
     this.onGlobalRestartKeyUp = (e: KeyboardEvent) => {
       const isR = e.code === 'KeyR' || e.key === 'r' || e.key === 'R'
@@ -143,26 +147,27 @@ export default class TopDownArenaScene extends Phaser.Scene {
       cfg.difficulty === 'hard' ? 95 : cfg.difficulty === 'easy' ? 55 : 75
 
     for (let i = 0; i < batch; i++) {
-      const edge = Phaser.Math.Between(0, 3)
+      const rng = rngFromString(`${this.sessionSeed}|arena|${this.totalSpawned}|${i}`)
+      const edge = intBetween(rng, 0, 3)
       let x = w / 2
       let y = h / 2
       if (edge === 0) {
-        x = Phaser.Math.Between(pad, w - pad)
+        x = intBetween(rng, pad, w - pad)
         y = pad
       } else if (edge === 1) {
         x = w - pad
-        y = Phaser.Math.Between(pad, h - pad)
+        y = intBetween(rng, pad, h - pad)
       } else if (edge === 2) {
-        x = Phaser.Math.Between(pad, w - pad)
+        x = intBetween(rng, pad, w - pad)
         y = h - pad
       } else {
         x = pad
-        y = Phaser.Math.Between(pad, h - pad)
+        y = intBetween(rng, pad, h - pad)
       }
 
       const enemy = this.enemies.create(x, y, 'arenaEnemyTex') as ArenaEnemy
       enemy.setImmovable(true)
-      enemy.setData('speed', speedBase + Phaser.Math.Between(-8, 18))
+      enemy.setData('speed', speedBase + intBetween(rng, -8, 18))
       const maxHp = cfg.difficulty === 'hard' ? 3 : cfg.difficulty === 'easy' ? 1 : 2
       enemy.hp = maxHp
       enemy.maxHp = maxHp
@@ -174,7 +179,7 @@ export default class TopDownArenaScene extends Phaser.Scene {
     if (this.gameOver) {
       const isDown = this.restartKey?.isDown === true
       if (isDown && !this.restartKeyHeld) {
-        this.scene.restart({ config: this.configData })
+        this.scene.restart({ config: this.configData, sessionSeed: this.sessionSeed })
       }
       this.restartKeyHeld = isDown
       return

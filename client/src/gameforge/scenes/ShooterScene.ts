@@ -3,6 +3,12 @@ import Phaser from 'phaser'
 import type { GameConfig } from '../GameConfig'
 import { buildPlatformerTemplateFromConfig } from '../buildPlatformerTemplateFromConfig'
 import { attachGlobalInput, detachGlobalInput, isCodeDown } from '../inputState'
+import {
+  createSessionSeed,
+  floatBetween,
+  intBetween,
+  rngFromString,
+} from '../sessionSeed'
 
 type EnemyShip = Phaser.Physics.Arcade.Image
 type EnemyHpUi = {
@@ -41,13 +47,18 @@ export default class ShooterScene extends Phaser.Scene {
   private onGlobalRestartKeyDown = (_e: KeyboardEvent) => {}
   private onGlobalRestartKeyUp = (_e: KeyboardEvent) => {}
   private readonly restartCaptureOptions = true
+  private sessionSeed = ''
+  private enemyRng!: () => number
+  private starRng!: () => number
+  private wrapRng!: () => number
 
   constructor() {
     super('ShooterScene')
   }
 
-  init(data?: { config?: GameConfig }) {
+  init(data?: { config?: GameConfig; sessionSeed?: string }) {
     this.configData = data?.config ?? null
+    if (data?.sessionSeed) this.sessionSeed = data.sessionSeed
   }
 
   create() {
@@ -66,7 +77,11 @@ export default class ShooterScene extends Phaser.Scene {
       platformDensity: 'medium',
       levelSize: 'medium',
     }
-    const template = buildPlatformerTemplateFromConfig(cfg)
+    if (!this.sessionSeed) this.sessionSeed = createSessionSeed()
+    this.enemyRng = rngFromString(`${this.sessionSeed}|shooterEnemy`)
+    this.starRng = rngFromString(`${this.sessionSeed}|shooterStars`)
+    this.wrapRng = rngFromString(`${this.sessionSeed}|shooterWrap`)
+    const template = buildPlatformerTemplateFromConfig(cfg, this.sessionSeed)
 
     this.cameras.main.setBackgroundColor(template.theme.backgroundColor)
     this.cursors = this.input.keyboard!.createCursorKeys()
@@ -84,7 +99,7 @@ export default class ShooterScene extends Phaser.Scene {
       if (!this.gameOver) return
       if (this.restartKeyHeld) return
       this.restartKeyHeld = true
-      this.scene.restart({ config: this.configData })
+      this.scene.restart({ config: this.configData, sessionSeed: this.sessionSeed })
     }
     this.onGlobalRestartKeyUp = (e: KeyboardEvent) => {
       const isR = e.code === 'KeyR' || e.key === 'r' || e.key === 'R'
@@ -95,7 +110,7 @@ export default class ShooterScene extends Phaser.Scene {
     window.addEventListener('keyup', this.onGlobalRestartKeyUp, this.restartCaptureOptions)
 
     this.createTextures(template.theme.playerFill, template.theme.platformStroke)
-    this.createStarfield()
+    this.createStarfield(this.starRng)
     this.createPlayer()
     this.createPools()
     this.spawnEnemies(cfg)
@@ -114,7 +129,7 @@ export default class ShooterScene extends Phaser.Scene {
       // Restart reliability: allow both R press and R-hold after win/lose.
       const isDown = this.restartKey?.isDown === true
       if (isDown && !this.restartKeyHeld) {
-        this.scene.restart({ config: this.configData })
+        this.scene.restart({ config: this.configData, sessionSeed: this.sessionSeed })
       }
       this.restartKeyHeld = isDown
       return
@@ -163,7 +178,7 @@ export default class ShooterScene extends Phaser.Scene {
 
       if (enemy.y > this.scale.height + 30) {
         enemy.y = -10
-        enemy.x = Phaser.Math.Between(30, this.scale.width - 30)
+        enemy.x = intBetween(this.wrapRng, 30, this.scale.width - 30)
       }
     }
 
@@ -172,7 +187,7 @@ export default class ShooterScene extends Phaser.Scene {
       star.y += 0.3 + star.radius * 0.17
       if (star.y > this.scale.height + 3) {
         star.y = -3
-        star.x = Phaser.Math.Between(0, this.scale.width)
+        star.x = intBetween(this.wrapRng, 0, this.scale.width)
       }
     }
   }
@@ -203,7 +218,7 @@ export default class ShooterScene extends Phaser.Scene {
     g.destroy()
   }
 
-  private createStarfield() {
+  private createStarfield(rng: () => number) {
     this.stars = this.add.group()
     this.add.rectangle(
       this.scale.width / 2,
@@ -217,11 +232,11 @@ export default class ShooterScene extends Phaser.Scene {
     this.add.circle(this.scale.width * 0.85, this.scale.height * 0.18, 120, 0xff4caa, 0.12)
     for (let i = 0; i < 120; i++) {
       const star = this.add.circle(
-        Phaser.Math.Between(0, this.scale.width),
-        Phaser.Math.Between(0, this.scale.height),
-        Phaser.Math.Between(1, 2),
+        intBetween(rng, 0, this.scale.width),
+        intBetween(rng, 0, this.scale.height),
+        intBetween(rng, 1, 2),
         0xffffff,
-        Phaser.Math.FloatBetween(0.2, 0.8),
+        floatBetween(rng, 0.2, 0.8),
       )
       this.stars.add(star)
     }
@@ -251,12 +266,12 @@ export default class ShooterScene extends Phaser.Scene {
     const speed = cfg.difficulty === 'hard' ? 2.5 : cfg.difficulty === 'easy' ? 1.4 : 2
     for (let i = 0; i < count; i++) {
       const enemy = this.enemies.create(
-        Phaser.Math.Between(35, this.scale.width - 35),
-        Phaser.Math.Between(-850, -20),
+        intBetween(this.enemyRng, 35, this.scale.width - 35),
+        intBetween(this.enemyRng, -850, -20),
         'shipEnemyTex',
       ) as EnemyShip
-      enemy.setData('speed', speed + Math.random() * 1.3)
-      enemy.setData('phase', Math.random() * 1500)
+      enemy.setData('speed', speed + floatBetween(this.enemyRng, 0, 1.3))
+      enemy.setData('phase', floatBetween(this.enemyRng, 0, 1500))
       enemy.setImmovable(true)
 
       const maxHp = cfg.difficulty === 'hard' ? 4 : cfg.difficulty === 'easy' ? 2 : 3
