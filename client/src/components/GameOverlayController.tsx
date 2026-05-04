@@ -11,6 +11,8 @@ import { logDeterministicGameConfigFallback } from '@/gameforge/logDeterministic
 import { isValidGameConfig } from '@/gameforge/validateGameConfig'
 
 function findPromptInput(): HTMLInputElement | null {
+  const byHook = document.querySelector('input[data-igraverse-prompt]')
+  if (byHook instanceof HTMLInputElement) return byHook
   return document.querySelector(
     'input[placeholder="Describe the game you want to build..."]',
   )

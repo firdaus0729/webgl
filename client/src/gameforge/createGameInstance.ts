@@ -12,8 +12,17 @@ export type GameMount = {
   destroy: () => void
 }
 
-function mountGame(gameConfig: GameConfig, host: HTMLElement): GameMount {
-  const sessionSeed = createSessionSeed()
+export type MountGameOptions = {
+  /** Fixed seed keeps procedural layout stable while tweaking sliders in the studio preview. */
+  sessionSeed?: string
+}
+
+function mountGame(
+  gameConfig: GameConfig,
+  host: HTMLElement,
+  options?: MountGameOptions,
+): GameMount {
+  const sessionSeed = options?.sessionSeed ?? createSessionSeed()
   const template = buildPlatformerTemplateFromConfig(gameConfig, sessionSeed)
 
   host.tabIndex = 0
@@ -124,7 +133,11 @@ export function mountGameFromPrompt(prompt: string, host: HTMLElement): GameMoun
   return mountGame(gameConfig, host)
 }
 
-export function mountGameFromConfig(config: GameConfig, host: HTMLElement): GameMount {
-  return mountGame(config, host)
+export function mountGameFromConfig(
+  config: GameConfig,
+  host: HTMLElement,
+  options?: MountGameOptions,
+): GameMount {
+  return mountGame(config, host, options)
 }
 
