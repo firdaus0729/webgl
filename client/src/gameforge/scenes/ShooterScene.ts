@@ -198,41 +198,59 @@ export default class ShooterScene extends Phaser.Scene {
   private createTextures(primary: number, accent: number) {
     const g = this.make.graphics({ x: 0, y: 0 })
 
+    // Player ship: layered hull + cockpit + thruster glow.
+    g.fillStyle(0x04070f, 0.35)
+    g.fillEllipse(22, 42, 22, 7)
     g.fillGradientStyle(primary, primary, accent, accent, 1)
-    g.fillTriangle(14, 0, 28, 36, 0, 36)
-    g.fillStyle(0xffffff, 0.8)
-    g.fillCircle(14, 17, 4)
-    g.fillStyle(accent, 0.9)
-    g.fillRoundedRect(11, 16, 6, 18, 2)
-    g.generateTexture('shipPlayerTex', 28, 34)
+    g.fillTriangle(22, 2, 40, 44, 4, 44)
+    g.fillStyle(0xffffff, 0.88)
+    g.fillTriangle(22, 8, 30, 22, 14, 22)
+    g.fillStyle(0x101624, 0.72)
+    g.fillRoundedRect(18, 22, 8, 18, 3)
+    g.fillStyle(accent, 0.85)
+    g.fillRect(16, 39, 4, 5)
+    g.fillRect(24, 39, 4, 5)
+    g.lineStyle(2, 0x0a0d14, 0.35)
+    g.strokeTriangle(22, 2, 40, 44, 4, 44)
+    g.generateTexture('shipPlayerTex', 44, 48)
 
     g.clear()
+    g.fillStyle(0x04070f, 0.34)
+    g.fillEllipse(20, 26, 24, 7)
     g.fillGradientStyle(0xff4b6f, 0xff4b6f, 0x572de6, 0x572de6, 1)
-    g.fillRoundedRect(0, 0, 32, 25, 8)
+    g.fillRoundedRect(3, 2, 34, 22, 8)
     g.fillStyle(0xffffff, 0.95)
-    g.fillCircle(9, 12, 3)
-    g.fillCircle(23, 12, 3)
-    g.generateTexture('shipEnemyTex', 30, 24)
+    g.fillCircle(13, 12, 3)
+    g.fillCircle(27, 12, 3)
+    g.fillStyle(0x1a2031, 0.74)
+    g.fillRoundedRect(12, 15, 16, 5, 2)
+    g.lineStyle(2, 0xffffff, 0.2)
+    g.strokeRoundedRect(3, 2, 34, 22, 8)
+    g.generateTexture('shipEnemyTex', 40, 30)
 
     g.clear()
-    g.fillStyle(0xffffff, 0.95)
-    g.fillRoundedRect(0, 0, 5, 18, 2)
-    g.generateTexture('laserTex', 5, 18)
+    g.fillStyle(0xffffff, 0.97)
+    g.fillRoundedRect(2, 0, 4, 20, 2)
+    g.fillStyle(accent, 0.7)
+    g.fillRoundedRect(3, 4, 2, 12, 1)
+    g.generateTexture('laserTex', 8, 20)
     g.destroy()
   }
 
   private createStarfield(rng: () => number, starCount: number) {
     this.stars = this.add.group()
-    this.add.rectangle(
-      this.scale.width / 2,
-      this.scale.height / 2,
-      this.scale.width,
-      this.scale.height,
-      0x0b1020,
-      0.82,
-    )
-    this.add.circle(this.scale.width * 0.2, this.scale.height * 0.2, 90, 0x4b7cff, 0.15)
-    this.add.circle(this.scale.width * 0.85, this.scale.height * 0.18, 120, 0xff4caa, 0.12)
+    const w = this.scale.width
+    const h = this.scale.height
+    this.add.rectangle(w / 2, h / 2, w, h, 0x080e1d, 0.9)
+    this.add.circle(w * 0.2, h * 0.2, 120, 0x4b7cff, 0.16)
+    this.add.circle(w * 0.85, h * 0.18, 160, 0xff4caa, 0.13)
+    this.add.circle(w * 0.56, h * 0.7, 190, 0x30f0ff, 0.06)
+
+    const grid = this.add.graphics().setDepth(0.5)
+    grid.lineStyle(1, 0xffffff, 0.05)
+    for (let y = 0; y <= h; y += 28) grid.lineBetween(0, y, w, y)
+    for (let x = 0; x <= w; x += 40) grid.lineBetween(x, 0, x, h)
+
     for (let i = 0; i < starCount; i++) {
       const star = this.add.circle(
         intBetween(rng, 0, this.scale.width),
@@ -243,6 +261,12 @@ export default class ShooterScene extends Phaser.Scene {
       )
       this.stars.add(star)
     }
+
+    // Subtle top/bottom vignette for depth and readability.
+    const vignette = this.add.graphics().setDepth(1.2)
+    vignette.fillStyle(0x04070f, 0.22)
+    vignette.fillRect(0, 0, w, 26)
+    vignette.fillRect(0, h - 36, w, 36)
   }
 
   private createPlayer(xDriftRatio: number) {

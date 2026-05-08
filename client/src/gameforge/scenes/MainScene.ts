@@ -179,63 +179,89 @@ export default class MainScene extends Phaser.Scene {
     const g = this.make.graphics({ x: 0, y: 0 })
     const tc = this.template.theme
 
-    g.fillGradientStyle(
-      tc.playerFill,
-      tc.playerFill,
-      tc.playerStroke,
-      tc.playerStroke,
-      1,
-    )
-    g.fillRoundedRect(0, 0, 38, 58, 10)
-    g.fillStyle(0xfff7df, 1)
-    g.fillCircle(19, 16, 10)
-    g.fillStyle(0x1d1d1d, 0.75)
-    g.fillRoundedRect(12, 28, 14, 20, 5)
-    g.lineStyle(2, tc.platformStroke, 0.8)
-    g.strokeRoundedRect(0, 0, 38, 58, 10)
-    g.generateTexture('heroTex', 38, 58)
+    // Hero sprite with stronger silhouette and highlight accents.
+    g.fillStyle(0x05070f, 0.34)
+    g.fillEllipse(28, 58, 30, 10)
+    g.fillGradientStyle(tc.playerStroke, tc.playerStroke, tc.playerFill, tc.playerFill, 1)
+    g.fillRoundedRect(10, 8, 36, 58, 12)
+    g.fillStyle(0xfff8e8, 1)
+    g.fillCircle(28, 24, 10)
+    g.fillStyle(0x0b111a, 0.92)
+    g.fillRoundedRect(19, 36, 18, 21, 6)
+    g.fillStyle(0xffffff, 0.18)
+    g.fillRoundedRect(15, 14, 6, 44, 3)
+    g.fillRoundedRect(35, 14, 4, 44, 2)
+    g.lineStyle(3, 0x0a0e15, 0.45)
+    g.strokeRoundedRect(10, 8, 36, 58, 12)
+    g.generateTexture('heroTex', 56, 72)
 
     g.clear()
-    g.fillGradientStyle(tc.platformFill, tc.platformFill, 0x202028, 0x202028, 1)
-    g.fillRoundedRect(0, 0, 210, 28, 9)
-    g.fillStyle(0xffffff, 0.12)
-    g.fillRoundedRect(8, 4, 190, 4, 3)
+    g.fillStyle(0x060913, 0.3)
+    g.fillRoundedRect(6, 24, 198, 4, 2)
+    g.fillGradientStyle(tc.platformStroke, tc.platformStroke, tc.platformFill, tc.platformFill, 1)
+    g.fillRoundedRect(0, 0, 210, 28, 10)
+    g.fillStyle(0xffffff, 0.18)
+    g.fillRoundedRect(8, 5, 194, 4, 3)
+    g.fillStyle(0x000000, 0.14)
+    g.fillRect(0, 21, 210, 7)
+    for (let x = 14; x < 194; x += 24) {
+      g.fillStyle(0xffffff, 0.08)
+      g.fillRect(x, 10, 12, 10)
+    }
     g.generateTexture('platformNeoTex', 210, 28)
 
     g.clear()
     if (this.template.enemies.enemyType === 'robots') {
-      g.fillStyle(0x9aa0ad, 1)
-      g.fillRoundedRect(6, 8, 30, 32, 8)
-      g.fillStyle(0x40ffd9, 1)
-      g.fillRoundedRect(13, 18, 8, 4, 2)
-      g.fillRoundedRect(22, 18, 8, 4, 2)
+      g.fillStyle(0x070b11, 0.35)
+      g.fillEllipse(24, 40, 26, 8)
+      g.fillStyle(0x9199ab, 1)
+      g.fillRoundedRect(8, 8, 32, 34, 8)
+      g.fillStyle(0x41ffe0, 1)
+      g.fillRoundedRect(15, 18, 8, 4, 2)
+      g.fillRoundedRect(25, 18, 8, 4, 2)
+      g.fillStyle(0x5f6678, 1)
+      g.fillRoundedRect(14, 28, 20, 6, 3)
     } else if (this.template.enemies.enemyType === 'aliens') {
+      g.fillStyle(0x070b11, 0.35)
+      g.fillEllipse(24, 40, 26, 8)
       g.fillStyle(0x9d5cff, 1)
-      g.fillEllipse(21, 23, 30, 34)
+      g.fillEllipse(24, 23, 30, 34)
       g.fillStyle(0xe3fffa, 1)
-      g.fillCircle(15, 20, 3)
-      g.fillCircle(27, 20, 3)
+      g.fillCircle(18, 20, 3)
+      g.fillCircle(30, 20, 3)
+      g.fillStyle(0xc56dff, 0.85)
+      g.fillEllipse(24, 30, 18, 8)
     } else {
+      g.fillStyle(0x070b11, 0.35)
+      g.fillEllipse(24, 40, 26, 8)
       g.fillStyle(0xff5e72, 1)
-      g.fillCircle(21, 21, 16)
+      g.fillCircle(24, 21, 16)
       g.fillStyle(0x1df5ff, 1)
-      g.fillCircle(21, 21, 5)
+      g.fillCircle(24, 21, 5)
+      g.fillStyle(0xffffff, 0.2)
+      g.fillCircle(19, 16, 3)
     }
-    g.lineStyle(2, 0xffffff, 0.3)
-    g.strokeRoundedRect(4, 6, 34, 36, 7)
-    g.generateTexture('foeTex', 42, 44)
+    g.lineStyle(2, 0xffffff, 0.28)
+    g.strokeRoundedRect(6, 6, 36, 36, 7)
+    g.generateTexture('foeTex', 48, 48)
 
     g.clear()
-    g.fillStyle(0xffffff, 0.92)
-    g.fillRoundedRect(0, 0, 24, 6, 3)
-    g.generateTexture('shotTex', 24, 6)
+    g.fillStyle(0xffffff, 0.96)
+    g.fillRoundedRect(0, 2, 26, 5, 3)
+    g.fillStyle(tc.playerStroke, 0.82)
+    g.fillRoundedRect(16, 2, 10, 5, 2)
+    g.generateTexture('shotTex', 26, 9)
 
     g.clear()
+    g.fillStyle(0x04070f, 0.35)
+    g.fillEllipse(16, 26, 14, 6)
     g.fillStyle(0xffd95e, 1)
-    g.fillCircle(12, 12, 10)
+    g.fillCircle(16, 14, 10)
+    g.fillStyle(0xfff3bf, 0.85)
+    g.fillCircle(12, 10, 3)
     g.lineStyle(2, 0xfffbde, 1)
-    g.strokeCircle(12, 12, 10)
-    g.generateTexture('relicTex', 24, 24)
+    g.strokeCircle(16, 14, 10)
+    g.generateTexture('relicTex', 32, 30)
     g.destroy()
   }
 
@@ -270,19 +296,38 @@ export default class MainScene extends Phaser.Scene {
 
   private drawSkyArt(worldWidth: number, h: number) {
     const v = this.template.sessionVariant
-    const back = this.add
-      .tileSprite(worldWidth / 2, h / 2, worldWidth, h, '__WHITE')
-      .setTint(0x0f1222)
-      .setAlpha(v?.skyBackAlpha ?? 0.5)
-    const mid = this.add
-      .tileSprite(worldWidth / 2, h / 2, worldWidth, h, '__WHITE')
-      .setTint(0x1d2e4a)
-      .setAlpha(v?.skyMidAlpha ?? 0.23)
-    const front = this.add
-      .tileSprite(worldWidth / 2, h / 2, worldWidth, h, '__WHITE')
-      .setTint(0x3a5a78)
-      .setAlpha(v?.skyFrontAlpha ?? 0.14)
+    const back = this.add.tileSprite(worldWidth / 2, h / 2, worldWidth, h, '__WHITE').setTint(0x0b1220)
+    back.setAlpha(v?.skyBackAlpha ?? 0.56)
+    const mid = this.add.tileSprite(worldWidth / 2, h / 2, worldWidth, h, '__WHITE').setTint(0x17273d)
+    mid.setAlpha(v?.skyMidAlpha ?? 0.28)
+    const front = this.add.tileSprite(worldWidth / 2, h / 2, worldWidth, h, '__WHITE').setTint(0x274968)
+    front.setAlpha(v?.skyFrontAlpha ?? 0.16)
     this.skyLayers = [back, mid, front]
+
+    const moon = this.add.circle(worldWidth * 0.82, h * 0.2, 44, 0xe7f3ff, 0.16)
+    moon.setScrollFactor(0.2)
+    this.add.circle(worldWidth * 0.82 - 14, h * 0.2 - 10, 30, 0x0b1220, 0.24).setScrollFactor(0.2)
+
+    const ridgeColors = [0x0f1b2f, 0x152742, 0x1e3556]
+    for (let layer = 0; layer < 3; layer++) {
+      const ridge = this.add.graphics()
+      ridge.fillStyle(ridgeColors[layer], 0.88 - layer * 0.16)
+      ridge.beginPath()
+      ridge.moveTo(0, h)
+      const peaks = Math.ceil(worldWidth / 120)
+      for (let i = 0; i <= peaks; i++) {
+        const x = (i / peaks) * worldWidth
+        const y =
+          h * (0.56 + layer * 0.09) +
+          Math.sin(i * (0.9 + layer * 0.22)) * (26 + layer * 12)
+        ridge.lineTo(x, y)
+      }
+      ridge.lineTo(worldWidth, h)
+      ridge.closePath()
+      ridge.fillPath()
+      ridge.setDepth(0.2 + layer * 0.2)
+      ridge.setScrollFactor(0.25 + layer * 0.15, 1)
+    }
 
     const starCount = v?.skyStarCount ?? 140
     const seed = this.template.sessionSeed
@@ -306,6 +351,11 @@ export default class MainScene extends Phaser.Scene {
         )
       }
     }
+
+    const vignette = this.add.graphics().setScrollFactor(0).setDepth(20)
+    vignette.fillStyle(0x04060c, 0.22)
+    vignette.fillRect(0, 0, worldWidth, 28)
+    vignette.fillRect(0, h - 46, worldWidth, 46)
   }
 
   private createPlayerAndSystems() {
@@ -331,10 +381,10 @@ export default class MainScene extends Phaser.Scene {
       const bridgeWidthPx = 210 * bridge.scaleX
       const bridgeCenterX = worldWidth * bridge.xRatio
       const bridgeCenterY = groundY - bridge.yAboveGroundRatio * h
-      // Texture sizes in pixels (before scaling): platformNeoTex is 210x28, foeTex is 42x44.
+      // Texture sizes in pixels (before scaling): platformNeoTex is 210x28, foeTex is 48x48.
       // Enemies must visually sit on top of the bridge, and must not fall (gravity disabled).
       const platformHeightPx = 28
-      const enemyHeightPx = 44
+      const enemyHeightPx = 48
       const enemyY = bridgeCenterY - (platformHeightPx + enemyHeightPx) / 2
       // Keep enemies slightly away from bridge edges to avoid clipping/falling.
       const edgeInsetPx = 14

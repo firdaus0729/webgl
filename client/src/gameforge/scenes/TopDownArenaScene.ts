@@ -257,39 +257,70 @@ export default class TopDownArenaScene extends Phaser.Scene {
   }
 
   private drawArena(accent: number) {
-    const g = this.add.graphics()
-    g.lineStyle(3, accent, 0.55)
-    g.strokeRoundedRect(
-      this.arenaPad - 8,
-      this.arenaPad - 8,
-      this.scale.width - (this.arenaPad - 8) * 2,
-      this.scale.height - (this.arenaPad - 8) * 2,
-      18,
-    )
-    g.setDepth(1)
+    const w = this.scale.width
+    const h = this.scale.height
+    const pad = this.arenaPad
+
+    this.add.rectangle(w / 2, h / 2, w, h, 0x070b13, 0.7).setDepth(0)
+    this.add.circle(w * 0.5, h * 0.52, h * 0.35, accent, 0.12).setDepth(0)
+    this.add.circle(w * 0.28, h * 0.24, h * 0.22, 0xff4aa1, 0.08).setDepth(0)
+    this.add.circle(w * 0.78, h * 0.2, h * 0.2, 0x37b6ff, 0.08).setDepth(0)
+
+    const g = this.add.graphics().setDepth(1)
+    g.lineStyle(1, 0xffffff, 0.08)
+    for (let x = pad; x <= w - pad; x += 34) g.lineBetween(x, pad, x, h - pad)
+    for (let y = pad; y <= h - pad; y += 34) g.lineBetween(pad, y, w - pad, y)
+
+    g.lineStyle(4, accent, 0.45)
+    g.strokeRoundedRect(pad - 8, pad - 8, w - (pad - 8) * 2, h - (pad - 8) * 2, 18)
+    g.lineStyle(2, 0xffffff, 0.16)
+    g.strokeRoundedRect(pad + 12, pad + 12, w - (pad + 12) * 2, h - (pad + 12) * 2, 14)
+
+    // Arena center ring motif (closer to premium fighter/arena samples).
+    const centerX = w / 2
+    const centerY = h / 2
+    g.lineStyle(3, 0xa6ebff, 0.45)
+    g.strokeCircle(centerX, centerY, 95)
+    g.lineStyle(2, 0xffffff, 0.12)
+    g.strokeCircle(centerX, centerY, 140)
   }
 
   private createTextures(primary: number, accent: number) {
     const g = this.make.graphics({ x: 0, y: 0 })
 
+    // Player: layered core + ring to avoid vague blob look.
+    g.fillStyle(0x04070f, 0.35)
+    g.fillEllipse(20, 36, 24, 8)
     g.fillGradientStyle(primary, primary, accent, accent, 1)
-    g.fillCircle(16, 16, 14)
-    g.fillStyle(0xffffff, 0.9)
-    g.fillCircle(20, 16, 4)
-    g.generateTexture('arenaPlayerTex', 32, 32)
+    g.fillCircle(20, 20, 16)
+    g.lineStyle(3, 0x0a0d14, 0.34)
+    g.strokeCircle(20, 20, 16)
+    g.fillStyle(0xffffff, 0.92)
+    g.fillCircle(24, 16, 4)
+    g.fillStyle(accent, 0.78)
+    g.fillCircle(20, 20, 7)
+    g.generateTexture('arenaPlayerTex', 40, 42)
 
     g.clear()
+    g.fillStyle(0x04070f, 0.34)
+    g.fillEllipse(19, 34, 22, 8)
     g.fillGradientStyle(0xff4b6f, 0xff4b6f, 0x572de6, 0x572de6, 1)
-    g.fillRoundedRect(0, 0, 28, 28, 6)
+    g.fillRoundedRect(4, 4, 30, 30, 8)
     g.fillStyle(0xffffff, 0.95)
-    g.fillCircle(10, 14, 3)
-    g.fillCircle(18, 14, 3)
-    g.generateTexture('arenaEnemyTex', 28, 28)
+    g.fillCircle(14, 19, 3)
+    g.fillCircle(24, 19, 3)
+    g.fillStyle(0x1a2030, 0.75)
+    g.fillRoundedRect(12, 24, 14, 5, 3)
+    g.lineStyle(2, 0xffffff, 0.2)
+    g.strokeRoundedRect(4, 4, 30, 30, 8)
+    g.generateTexture('arenaEnemyTex', 38, 40)
 
     g.clear()
-    g.fillStyle(0xfff6d2, 0.95)
-    g.fillCircle(5, 5, 5)
-    g.generateTexture('arenaBulletTex', 10, 10)
+    g.fillStyle(0xfff6d2, 0.98)
+    g.fillCircle(6, 6, 5)
+    g.fillStyle(accent, 0.85)
+    g.fillCircle(6, 6, 2)
+    g.generateTexture('arenaBulletTex', 12, 12)
     g.destroy()
   }
 
