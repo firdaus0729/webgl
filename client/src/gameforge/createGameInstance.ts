@@ -3,6 +3,7 @@ import Phaser from 'phaser'
 import MainScene from './scenes/MainScene'
 import ShooterScene from './scenes/ShooterScene'
 import TopDownArenaScene from './scenes/TopDownArenaScene'
+import BoxingScene from './scenes/BoxingScene'
 import type { GameConfig } from './GameConfig'
 import { buildPlatformerTemplateFromConfig } from './buildPlatformerTemplateFromConfig'
 import { parsePromptToConfig } from './parsePromptToConfig'
@@ -59,9 +60,12 @@ function mountGame(
   game.scene.add('MainScene', MainScene, false)
   game.scene.add('ShooterScene', ShooterScene, false)
   game.scene.add('TopDownArenaScene', TopDownArenaScene, false)
+  game.scene.add('BoxingScene', BoxingScene, false)
 
   const sceneKey =
-    gameConfig.gameType === 'top_down_arena'
+    gameConfig.gameType === 'boxing_1v1'
+      ? 'BoxingScene'
+      : gameConfig.gameType === 'top_down_arena'
       ? 'TopDownArenaScene'
       : gameConfig.gameType === 'retro_shooter'
         ? 'ShooterScene'
@@ -88,6 +92,7 @@ function mountGame(
     'arrowleft',
     'arrowright',
     'j',
+    'k',
     'p',
   ])
 
@@ -112,6 +117,7 @@ function mountGame(
     Phaser.Input.Keyboard.KeyCodes.LEFT,
     Phaser.Input.Keyboard.KeyCodes.RIGHT,
     Phaser.Input.Keyboard.KeyCodes.J,
+    Phaser.Input.Keyboard.KeyCodes.K,
     Phaser.Input.Keyboard.KeyCodes.P,
     Phaser.Input.Keyboard.KeyCodes.R,
   ])

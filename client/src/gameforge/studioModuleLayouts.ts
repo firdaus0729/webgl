@@ -1,6 +1,11 @@
 import type { ModuleSelectionState } from "./moduleSelectionToConfig"
 
-export const STUDIO_GAME_TYPES = ["platformer", "top-down arena", "retro shooter"] as const
+export const STUDIO_GAME_TYPES = [
+  "platformer",
+  "top-down arena",
+  "retro shooter",
+  "boxing 1v1",
+] as const
 export type StudioGameTypeLabel = (typeof STUDIO_GAME_TYPES)[number]
 
 export type StudioModuleField =
@@ -48,6 +53,7 @@ const RULES_ALL = [
 const VISUAL_ALL = ["pixel art", "8-bit retro", "16-bit retro", "cartoon retro"] as const
 
 const AUDIO_ALL = ["simple chiptune", "retro arcade loop", "minimal SFX", "chiptune + SFX"] as const
+const AUDIO_BOXING = ["crowd chants + bell", "arena bass loop", "minimal SFX", "retro arcade loop"] as const
 
 /** Full option matrix per genre: visible rails use subsets; hidden rails read only `hiddenDefaults`. */
 export const STUDIO_LAYOUT_BY_GAME_TYPE: Record<StudioGameTypeLabel, StudioLayout> = {
@@ -89,11 +95,26 @@ export const STUDIO_LAYOUT_BY_GAME_TYPE: Record<StudioGameTypeLabel, StudioLayou
       movement: "run and jump",
     },
   },
+  "boxing 1v1": {
+    visiblePanels: ["interaction", "behavior", "rules", "visualStyle", "audio"],
+    options: {
+      movement: MOVEMENT_ALL,
+      interaction: ["jab + cross rhythm", "body-shot pressure", "power hooks", "feint then counter"],
+      behavior: ["counter boxer", "aggressive brawler", "technical footwork", "high guard pressure"],
+      rules: ["3 rounds decision", "5 rounds title fight", "sudden KO bout", "championship distance"],
+      visualStyle: ["16-bit retro", "cartoon retro", "pixel art", "8-bit retro"],
+      audio: AUDIO_BOXING,
+    },
+    hiddenDefaults: {
+      movement: "dash + jump",
+    },
+  },
 }
 
 export function layoutForGameTypeLabel(label: string): StudioLayout {
   if (label === "top-down arena") return STUDIO_LAYOUT_BY_GAME_TYPE["top-down arena"]
   if (label === "retro shooter") return STUDIO_LAYOUT_BY_GAME_TYPE["retro shooter"]
+  if (label === "boxing 1v1") return STUDIO_LAYOUT_BY_GAME_TYPE["boxing 1v1"]
   return STUDIO_LAYOUT_BY_GAME_TYPE.platformer
 }
 
@@ -128,10 +149,10 @@ export function buildPromptFragmentsFromLayout(
         parts.push(`with ${sel.movement}`)
         break
       case "interaction":
-        parts.push(`where players ${sel.interaction}`)
+        parts.push(`interaction: ${sel.interaction}`)
         break
       case "behavior":
-        parts.push(`enemies use ${sel.behavior}`)
+        parts.push(`behavior: ${sel.behavior}`)
         break
       case "rules":
         parts.push(`rules: ${sel.rules}`)

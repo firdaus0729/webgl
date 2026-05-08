@@ -5,10 +5,11 @@ import { gameConfigSchema, type GameConfigDTO } from "./gameConfigSchema";
 const SYSTEM = `You are a game design assistant for a small browser game engine.
 The user describes what they want. You output ONE JSON object only (no markdown, no prose) with exactly these keys and string values from the allowed sets:
 
-- gameType: "platformer" | "top_down_arena" | "retro_shooter"
+- gameType: "platformer" | "top_down_arena" | "retro_shooter" | "boxing_1v1"
   - platformer: jump-and-collect on platforms
   - top_down_arena: twin-stick style arena (move + shoot in any direction)
   - retro_shooter: vertical arcade shmup (enemies descend, shoot upward)
+  - boxing_1v1: side-view one-on-one boxing match in a ring
 - theme: "cyberpunk" | "forest" | "desert" | "cartoon"
 - difficulty: "easy" | "medium" | "hard"
 - enemyType: "drones" | "aliens" | "robots"

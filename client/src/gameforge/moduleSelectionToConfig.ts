@@ -19,6 +19,7 @@ export function gameConfigFromModuleSelection(sel: ModuleSelectionState): GameCo
   const moduleToGameType = (): GameConfig['gameType'] => {
     if (sel.gameType === 'top-down arena') return 'top_down_arena'
     if (sel.gameType === 'retro shooter') return 'retro_shooter'
+    if (sel.gameType === 'boxing 1v1') return 'boxing_1v1'
     return 'platformer'
   }
 
@@ -32,20 +33,20 @@ export function gameConfigFromModuleSelection(sel: ModuleSelectionState): GameCo
         : 'cyberpunk'
 
   const enemyType: GameConfig['enemyType'] =
-    sel.behavior === 'stationary turrets'
+    sel.behavior === 'stationary turrets' || sel.behavior.includes('counter')
       ? 'robots'
-      : sel.behavior === 'wave spawns'
+      : sel.behavior === 'wave spawns' || sel.behavior.includes('aggressive')
         ? 'aliens'
-        : sel.behavior === 'patrol guards'
+        : sel.behavior === 'patrol guards' || sel.behavior.includes('footwork')
           ? 'drones'
           : 'robots'
 
   const enemyDensity: GameConfig['enemyDensity'] =
-    sel.interaction === 'collect items'
+    sel.interaction === 'collect items' || sel.interaction.includes('feint')
       ? 'low'
-      : sel.interaction === 'collide with enemies'
+      : sel.interaction === 'collide with enemies' || sel.interaction.includes('jab')
         ? 'medium'
-        : sel.interaction === 'shoot enemies'
+        : sel.interaction === 'shoot enemies' || sel.interaction.includes('power')
           ? 'high'
           : 'medium'
 
@@ -61,9 +62,9 @@ export function gameConfigFromModuleSelection(sel: ModuleSelectionState): GameCo
             : 'medium'
 
   const levelSize: GameConfig['levelSize'] =
-    sel.rules === 'score + timer'
+    sel.rules === 'score + timer' || sel.rules.includes('round')
       ? 'small'
-      : sel.rules === 'survive waves'
+      : sel.rules === 'survive waves' || sel.rules.includes('championship')
         ? 'large'
         : 'medium'
 

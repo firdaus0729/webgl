@@ -31,8 +31,23 @@ export function parsePromptToConfig(prompt: string): GameConfig {
   let platformDensity: PlatformDensity = 'medium'
   let levelSize: LevelSize = 'medium'
 
-  // gameType (three modes — must match `GameConfig` + Phaser scene routing)
+  // gameType (must match `GameConfig` + Phaser scene routing)
   if (
+    containsAny(text, [
+      'boxing',
+      '1v1',
+      'one on one',
+      'one-on-one',
+      'ring fight',
+      'punch',
+      'knockout',
+      'heavyweight',
+      'middleweight',
+      'sparring',
+    ])
+  ) {
+    gameType = 'boxing_1v1'
+  } else if (
     containsAny(text, [
       'top-down arena',
       'top down arena',

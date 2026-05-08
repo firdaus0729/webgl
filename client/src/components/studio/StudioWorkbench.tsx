@@ -30,7 +30,7 @@ type StudioPanelId = "gameType" | StudioModuleField | null
 
 const PANEL_HINTS: Record<Exclude<StudioPanelId, null>, string> = {
   gameType:
-    "Genre drives which runtime is used (platformer, arena, or vertical shooter). The preview remasters when you switch.",
+    "Genre drives which runtime is used (platformer, arena, vertical shooter, or boxing 1v1). The preview remasters when you switch.",
   movement:
     "Alters platform density in side-view modes and how spacious the run feels. Open-world movement maps to lower platform density in shooters.",
   interaction:

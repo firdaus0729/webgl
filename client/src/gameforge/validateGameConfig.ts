@@ -1,6 +1,11 @@
 import type { GameConfig } from './GameConfig'
 
-const GAME_TYPES = ['platformer', 'top_down_arena', 'retro_shooter'] as const
+const GAME_TYPES = [
+  'platformer',
+  'top_down_arena',
+  'retro_shooter',
+  'boxing_1v1',
+] as const
 const THEMES = ['cyberpunk', 'forest', 'desert', 'cartoon'] as const
 const DIFFICULTIES = ['easy', 'medium', 'hard'] as const
 const ENEMY_TYPES = ['drones', 'aliens', 'robots'] as const

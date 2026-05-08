@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /** Matches client `GameConfig` — used to validate LLM output server-side. */
 export const gameConfigSchema = z.object({
-  gameType: z.enum(["platformer", "top_down_arena", "retro_shooter"]),
+  gameType: z.enum(["platformer", "top_down_arena", "retro_shooter", "boxing_1v1"]),
   theme: z.enum(["cyberpunk", "forest", "desert", "cartoon"]),
   difficulty: z.enum(["easy", "medium", "hard"]),
   enemyType: z.enum(["drones", "aliens", "robots"]),
