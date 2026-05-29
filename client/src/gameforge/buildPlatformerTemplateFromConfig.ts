@@ -8,6 +8,7 @@ import {
   mulberry32,
   rngFromString,
 } from './sessionSeed'
+import { generateLevelElements } from './buildLevelElements'
 
 const themeToColors: Record<
   GameConfig['theme'],
@@ -19,45 +20,45 @@ const themeToColors: Record<
     platformStroke: number
   }
 > = {
-  cyberpunk: {
-    backgroundColor: '#001b20',
-    playerFill: 0x01a4f3,
-    playerStroke: 0x02a955,
-    platformFill: 0x02a955,
-    platformStroke: 0x01a4f3,
+  cartoon: {
+    backgroundColor: '#5c94fc',
+    playerFill: 0xe52521,
+    playerStroke: 0x2150d0,
+    platformFill: 0x00a844,
+    platformStroke: 0xc84c0c,
   },
   forest: {
-    backgroundColor: '#041813',
-    playerFill: 0x2ef39a,
-    playerStroke: 0x01a4f3,
-    platformFill: 0x2a9d5a,
-    platformStroke: 0x01a4f3,
+    backgroundColor: '#4488cc',
+    playerFill: 0x208030,
+    playerStroke: 0x603818,
+    platformFill: 0x38a048,
+    platformStroke: 0x7a5030,
   },
   desert: {
-    backgroundColor: '#1a120a',
-    playerFill: 0xffc857,
-    playerStroke: 0x01a4f3,
-    platformFill: 0x02a955,
-    platformStroke: 0xffc857,
+    backgroundColor: '#f8a848',
+    playerFill: 0xe85020,
+    playerStroke: 0x3060c0,
+    platformFill: 0xd0a050,
+    platformStroke: 0xd87830,
   },
-  cartoon: {
-    backgroundColor: '#0b1f23',
-    playerFill: 0x01a4f3,
-    playerStroke: 0x02a955,
-    platformFill: 0x02a955,
-    platformStroke: 0x01a4f3,
+  cyberpunk: {
+    backgroundColor: '#180828',
+    playerFill: 0xff2080,
+    playerStroke: 0x2080ff,
+    platformFill: 0x303878,
+    platformStroke: 0x503060,
   },
 }
 
 function difficultyTuning(game: GameConfig) {
   switch (game.difficulty) {
     case 'easy':
-      return { gravityY: 900, moveSpeed: 220, jumpSpeed: 460 }
+      return { gravityY: 1100, moveSpeed: 240, jumpSpeed: 500 }
     case 'hard':
-      return { gravityY: 1500, moveSpeed: 290, jumpSpeed: 560 }
+      return { gravityY: 1650, moveSpeed: 280, jumpSpeed: 580 }
     case 'medium':
     default:
-      return { gravityY: 1200, moveSpeed: 260, jumpSpeed: 520 }
+      return { gravityY: 1400, moveSpeed: 260, jumpSpeed: 540 }
   }
 }
 
@@ -350,11 +351,13 @@ export function buildPlatformerTemplateFromConfig(
   )
 
   const sessionVariant = buildSessionVisualVariant(sessionSeed)
+  const levelElements = generateLevelElements(game, sessionSeed)
 
   return {
     ...base,
     sessionSeed,
     sessionVariant,
+    levelElements,
     world: {
       ...base.world,
       widthScale,

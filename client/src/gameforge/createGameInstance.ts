@@ -8,6 +8,7 @@ import type { GameConfig } from './GameConfig'
 import { buildPlatformerTemplateFromConfig } from './buildPlatformerTemplateFromConfig'
 import { parsePromptToConfig } from './parsePromptToConfig'
 import { createSessionSeed } from './sessionSeed'
+import { bgmForGameType, getChiptuneAudio } from './nintendo/ChiptuneAudio'
 
 export type GameMount = {
   destroy: () => void
@@ -35,7 +36,9 @@ function mountGame(
   const baseConfig: Phaser.Types.Core.GameConfig = {
     type: Phaser.AUTO,
     backgroundColor: template.theme.backgroundColor,
-    pixelArt: false,
+    pixelArt: true,
+    roundPixels: true,
+    antialias: false,
     physics: {
       default: 'arcade',
       arcade: {
@@ -71,6 +74,10 @@ function mountGame(
         ? 'ShooterScene'
         : 'MainScene'
   game.scene.start(sceneKey, { config: gameConfig, sessionSeed })
+
+  const audio = getChiptuneAudio()
+  audio.bindUnlock(host)
+  audio.startBgm(bgmForGameType(gameConfig.gameType))
 
   window.setTimeout(() => host.focus(), 0)
 
@@ -128,6 +135,7 @@ function mountGame(
     destroy: () => {
       ro.disconnect()
       window.removeEventListener('keydown', onWindowKeyDown)
+      getChiptuneAudio().stopAll()
       game.destroy(true)
     },
   }

@@ -3,15 +3,42 @@ import Phaser from 'phaser'
 import {
   PLATFORMER_TEMPLATE_CONFIG,
   type PlatformerTemplateConfig,
+  type QuestionBlockReward,
 } from '../config'
 import type { GameConfig } from '../GameConfig'
 import { buildPlatformerTemplateFromConfig } from '../buildPlatformerTemplateFromConfig'
-import { createSessionSeed, floatBetween, intBetween, rngFromString } from '../sessionSeed'
+import { createSessionSeed } from '../sessionSeed'
 import Player from '../objects/Player'
 import Enemy from '../objects/Enemy'
 import { attachGlobalInput, detachGlobalInput, isCodeDown } from '../inputState'
+import {
+  createNintendoBackground,
+  spawnDecorBlocks,
+  type BackgroundLayers,
+} from '../nintendo/BackgroundArt'
+import {
+  emitCoinSparkle,
+  emitEnemyDefeat,
+  emitLandDust,
+  emitStompBounce,
+  flagCelebration,
+  screenShake,
+  squashOnLand,
+  stretchOnJump,
+} from '../nintendo/GameJuice'
+import { getNintendoPalette } from '../nintendo/NintendoPalette'
+import { createNintendoTextures, type NintendoTextureKeys } from '../nintendo/SpriteFactory'
+import { playSfx } from '../nintendo/ChiptuneAudio'
 
-const HUD_FONT = 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+const HUD_FONT = '"Press Start 2P", "Courier New", monospace'
+const PLATFORM_BASE_W = 48
+const LEGACY_PLATFORM_W = 210
+const COIN_VALUE = 100
+const STOMP_SCORE = 200
+const FIRE_SCORE = 150
+const START_LIVES = 3
+const INVINCIBLE_MS = 1200
+const STAR_DURATION_MS = 10000
 
 export default class MainScene extends Phaser.Scene {
   private player: Player | null = null
@@ -20,25 +47,38 @@ export default class MainScene extends Phaser.Scene {
   private baseTemplate: PlatformerTemplateConfig = PLATFORMER_TEMPLATE_CONFIG
   private enemies: Enemy[] = []
   private bullets!: Phaser.Physics.Arcade.Group
-  private relics!: Phaser.Physics.Arcade.Group
+  private coins!: Phaser.Physics.Arcade.Group
+  private flag!: Phaser.Physics.Arcade.Image
+  private questionBlocks!: Phaser.Physics.Arcade.StaticGroup
+  private pipes!: Phaser.Physics.Arcade.StaticGroup
+  private checkpoints!: Phaser.Physics.Arcade.StaticGroup
+  private powerUps!: Phaser.Physics.Arcade.Group
+  private texKeys!: NintendoTextureKeys
+  private bgLayers: BackgroundLayers | null = null
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
   private shootKey!: Phaser.Input.Keyboard.Key
   private pauseKey!: Phaser.Input.Keyboard.Key
   private leftKey!: Phaser.Input.Keyboard.Key
   private rightKey!: Phaser.Input.Keyboard.Key
   private jumpKey!: Phaser.Input.Keyboard.Key
-  private skyLayers: Phaser.GameObjects.TileSprite[] = []
+  private downKey!: Phaser.Input.Keyboard.Key
   private lastShotAt = 0
-  private health = 100
+  private lives = START_LIVES
+  private coinsCollected = 0
+  private totalCoins = 0
   private score = 0
-  private remainingRelics = 0
-  private totalRelics = 0
+  private spawnX = 0
+  private spawnY = 0
+  private checkpointX = 0
+  private checkpointY = 0
+  private checkpointActive = false
+  private hasFlower = false
+  private starUntil = 0
   private over = false
   private paused = false
+  private invincibleUntil = 0
   private hudText: Phaser.GameObjects.Text | null = null
   private noticeText: Phaser.GameObjects.Text | null = null
-  private hudChrome: Phaser.GameObjects.Graphics | null = null
-  private restartListenerAdded = false
   private restartKey!: Phaser.Input.Keyboard.Key
   private restartKeyHeld = false
   private onGlobalRestartKeyDown = (_e: KeyboardEvent) => {}
@@ -46,6 +86,7 @@ export default class MainScene extends Phaser.Scene {
   private readonly restartCaptureOptions = true
   private storedConfig: GameConfig | null = null
   private sessionSeed = ''
+  private worldWidth = 0
 
   constructor() {
     super('MainScene')
@@ -74,27 +115,27 @@ export default class MainScene extends Phaser.Scene {
   }
 
   create() {
-    // The original gameplay tuning in frontend assumed a fixed 960x540 canvas.
-    // In igraverse we render the game full-screen, so vertical distances scale with
-    // the Phaser height. To keep jump reach consistent, scale jump speed by
-    // sqrt(height / 540).
     const heightScale = Math.max(0.25, this.scale.height / 540)
-    const jumpTuningMultiplier = 0.95
     this.template = {
       ...this.baseTemplate,
       player: {
         ...this.baseTemplate.player,
         jumpSpeed:
-          this.baseTemplate.player.jumpSpeed * Math.sqrt(heightScale) * jumpTuningMultiplier,
+          this.baseTemplate.player.jumpSpeed * Math.sqrt(heightScale) * 0.98,
       },
     }
 
     this.physics.world.gravity.y = this.template.world.gravityY
     this.over = false
     this.paused = false
-    this.health = 100
+    this.lives = START_LIVES
+    this.coinsCollected = 0
     this.score = 0
     this.lastShotAt = 0
+    this.invincibleUntil = 0
+    this.checkpointActive = false
+    this.hasFlower = false
+    this.starUntil = 0
 
     this.cursors = this.input.keyboard!.createCursorKeys()
     this.shootKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.J)
@@ -102,15 +143,12 @@ export default class MainScene extends Phaser.Scene {
     this.leftKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A)
     this.rightKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D)
     this.jumpKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W)
+    this.downKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S)
     this.restartKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.R)
 
-    // Extra reliability: if Phaser's keyboard state is disrupted (fullscreen/pointer lock),
-    // listen directly to DOM key events for R/r and restart.
     this.onGlobalRestartKeyDown = (e: KeyboardEvent) => {
       const isR = e.code === 'KeyR' || e.key === 'r' || e.key === 'R'
-      if (!isR) return
-      if (!this.over) return
-      // Prevent multiple restarts from key auto-repeat.
+      if (!isR || !this.over) return
       if (this.restartKeyHeld) return
       this.restartKeyHeld = true
       this.scene.restart(this.restartPayload())
@@ -123,7 +161,11 @@ export default class MainScene extends Phaser.Scene {
     window.addEventListener('keydown', this.onGlobalRestartKeyDown, this.restartCaptureOptions)
     window.addEventListener('keyup', this.onGlobalRestartKeyUp, this.restartCaptureOptions)
 
-    this.createTextures()
+    this.texKeys = createNintendoTextures(
+      this,
+      this.template.meta.theme,
+      this.template.enemies.enemyType,
+    )
     this.createWorldAndBackground()
     this.createPlayerAndSystems()
     this.createHud()
@@ -135,10 +177,11 @@ export default class MainScene extends Phaser.Scene {
     })
   }
 
-  update() {
+  update(_time: number) {
     if (!this.player) return
+    const now = this.time.now
+
     if (this.over) {
-      // Restart reliability: allow both R press and R-hold after win/lose.
       const isDown = this.restartKey?.isDown === true
       if (isDown && !this.restartKeyHeld) {
         this.scene.restart(this.restartPayload())
@@ -147,435 +190,557 @@ export default class MainScene extends Phaser.Scene {
       return
     }
     this.restartKeyHeld = false
+
     if (Phaser.Input.Keyboard.JustDown(this.pauseKey)) {
       this.paused = !this.paused
       this.physics.world.isPaused = this.paused
-      this.showNotice(this.paused ? 'PAUSED' : '')
+      if (this.paused) playSfx('pause')
+      this.showNotice(this.paused ? '⏸ PAUSED' : '')
     }
     if (this.paused) return
 
-    this.player.updateControls(this.cursors, {
-      left:
-        isCodeDown('KeyA') ||
-        this.leftKey.isDown ||
-        this.cursors.left.isDown,
-      right:
-        isCodeDown('KeyD') ||
-        this.rightKey.isDown ||
-        this.cursors.right.isDown,
-      jump:
-        isCodeDown('KeyW') ||
-        this.jumpKey.isDown ||
-        this.cursors.up.isDown,
-    })
+    this.player.updateControls(
+      this.cursors,
+      {
+        left: isCodeDown('KeyA') || this.leftKey.isDown || this.cursors.left.isDown,
+        right: isCodeDown('KeyD') || this.rightKey.isDown || this.cursors.right.isDown,
+        jump:
+          isCodeDown('KeyW') ||
+          this.jumpKey.isDown ||
+          this.cursors.up.isDown ||
+          this.cursors.space?.isDown,
+      },
+      now,
+    )
+
     if (this.shootKey.isDown) this.tryShoot()
-    for (const enemy of this.enemies) enemy.updateAI(this.player)
-    this.scrollBackground()
+    for (const enemy of this.enemies) enemy.updateAI(this.player, now)
+
+    this.tryPipeWarp()
+    this.animateCoins(now)
+    this.updateInvincibility(now)
     this.updateHud()
-    this.checkResult()
   }
 
-  private createTextures() {
-    const g = this.make.graphics({ x: 0, y: 0 })
-    const tc = this.template.theme
+  private platformScale(scaleX: number) {
+    return scaleX * (LEGACY_PLATFORM_W / PLATFORM_BASE_W)
+  }
 
-    // Hero sprite with stronger silhouette and highlight accents.
-    g.fillStyle(0x05070f, 0.34)
-    g.fillEllipse(28, 58, 30, 10)
-    g.fillGradientStyle(tc.playerStroke, tc.playerStroke, tc.playerFill, tc.playerFill, 1)
-    g.fillRoundedRect(10, 8, 36, 58, 12)
-    g.fillStyle(0xfff8e8, 1)
-    g.fillCircle(28, 24, 10)
-    g.fillStyle(0x0b111a, 0.92)
-    g.fillRoundedRect(19, 36, 18, 21, 6)
-    g.fillStyle(0xffffff, 0.18)
-    g.fillRoundedRect(15, 14, 6, 44, 3)
-    g.fillRoundedRect(35, 14, 4, 44, 2)
-    g.lineStyle(3, 0x0a0e15, 0.45)
-    g.strokeRoundedRect(10, 8, 36, 58, 12)
-    g.generateTexture('heroTex', 56, 72)
-
-    g.clear()
-    g.fillStyle(0x060913, 0.3)
-    g.fillRoundedRect(6, 24, 198, 4, 2)
-    g.fillGradientStyle(tc.platformStroke, tc.platformStroke, tc.platformFill, tc.platformFill, 1)
-    g.fillRoundedRect(0, 0, 210, 28, 10)
-    g.fillStyle(0xffffff, 0.18)
-    g.fillRoundedRect(8, 5, 194, 4, 3)
-    g.fillStyle(0x000000, 0.14)
-    g.fillRect(0, 21, 210, 7)
-    for (let x = 14; x < 194; x += 24) {
-      g.fillStyle(0xffffff, 0.08)
-      g.fillRect(x, 10, 12, 10)
-    }
-    g.generateTexture('platformNeoTex', 210, 28)
-
-    g.clear()
-    if (this.template.enemies.enemyType === 'robots') {
-      g.fillStyle(0x070b11, 0.35)
-      g.fillEllipse(24, 40, 26, 8)
-      g.fillStyle(0x9199ab, 1)
-      g.fillRoundedRect(8, 8, 32, 34, 8)
-      g.fillStyle(0x41ffe0, 1)
-      g.fillRoundedRect(15, 18, 8, 4, 2)
-      g.fillRoundedRect(25, 18, 8, 4, 2)
-      g.fillStyle(0x5f6678, 1)
-      g.fillRoundedRect(14, 28, 20, 6, 3)
-    } else if (this.template.enemies.enemyType === 'aliens') {
-      g.fillStyle(0x070b11, 0.35)
-      g.fillEllipse(24, 40, 26, 8)
-      g.fillStyle(0x9d5cff, 1)
-      g.fillEllipse(24, 23, 30, 34)
-      g.fillStyle(0xe3fffa, 1)
-      g.fillCircle(18, 20, 3)
-      g.fillCircle(30, 20, 3)
-      g.fillStyle(0xc56dff, 0.85)
-      g.fillEllipse(24, 30, 18, 8)
-    } else {
-      g.fillStyle(0x070b11, 0.35)
-      g.fillEllipse(24, 40, 26, 8)
-      g.fillStyle(0xff5e72, 1)
-      g.fillCircle(24, 21, 16)
-      g.fillStyle(0x1df5ff, 1)
-      g.fillCircle(24, 21, 5)
-      g.fillStyle(0xffffff, 0.2)
-      g.fillCircle(19, 16, 3)
-    }
-    g.lineStyle(2, 0xffffff, 0.28)
-    g.strokeRoundedRect(6, 6, 36, 36, 7)
-    g.generateTexture('foeTex', 48, 48)
-
-    g.clear()
-    g.fillStyle(0xffffff, 0.96)
-    g.fillRoundedRect(0, 2, 26, 5, 3)
-    g.fillStyle(tc.playerStroke, 0.82)
-    g.fillRoundedRect(16, 2, 10, 5, 2)
-    g.generateTexture('shotTex', 26, 9)
-
-    g.clear()
-    g.fillStyle(0x04070f, 0.35)
-    g.fillEllipse(16, 26, 14, 6)
-    g.fillStyle(0xffd95e, 1)
-    g.fillCircle(16, 14, 10)
-    g.fillStyle(0xfff3bf, 0.85)
-    g.fillCircle(12, 10, 3)
-    g.lineStyle(2, 0xfffbde, 1)
-    g.strokeCircle(16, 14, 10)
-    g.generateTexture('relicTex', 32, 30)
-    g.destroy()
+  private platformWidth(scaleX: number) {
+    return PLATFORM_BASE_W * this.platformScale(scaleX)
   }
 
   private createWorldAndBackground() {
     const w = this.scale.width
     const h = this.scale.height
-    const worldWidth = Math.floor(w * this.template.world.widthScale)
-    this.physics.world.setBounds(0, 0, worldWidth, h)
-    this.cameras.main.setBounds(0, 0, worldWidth, h)
-    this.cameras.main.setBackgroundColor(this.template.theme.backgroundColor)
+    this.worldWidth = Math.floor(w * this.template.world.widthScale)
+    this.physics.world.setBounds(0, 0, this.worldWidth, h)
+    this.cameras.main.setBounds(0, 0, this.worldWidth, h)
 
-    this.drawSkyArt(worldWidth, h)
+    const pal = getNintendoPalette(this.template.meta.theme)
+    this.cameras.main.setBackgroundColor(pal.skyTop)
+
+    this.bgLayers = createNintendoBackground(this, this.template, this.worldWidth, h)
+    spawnDecorBlocks(this, this.template, this.worldWidth, h)
 
     this.platforms = this.physics.add.staticGroup()
     const groundY = h - this.template.world.groundYOffsetRatio * h
-    const groundScaleX = Math.max(1, worldWidth / 210)
+    const groundScaleX = Math.max(1, this.worldWidth / 96)
     const ground = this.platforms
-      .create(worldWidth / 2, groundY, 'platformNeoTex')
+      .create(this.worldWidth / 2, groundY, this.texKeys.ground)
       .setScale(groundScaleX, 1)
     ground.refreshBody()
 
     for (const p of this.template.platforms.floating) {
       const plat = this.platforms.create(
-        worldWidth * p.xRatio,
+        this.worldWidth * p.xRatio,
         groundY - p.yAboveGroundRatio * h,
-        'platformNeoTex',
+        this.texKeys.platform,
       )
-      plat.setScale(p.scaleX, 1)
+      plat.setScale(this.platformScale(p.scaleX), 1)
       plat.refreshBody()
     }
+
+    const flagX = this.worldWidth - 50
+    const flagY = groundY - 78
+    this.flag = this.physics.add
+      .staticImage(flagX, flagY, this.texKeys.flag)
+      .setDepth(3)
+      .setOrigin(0, 1) as Phaser.Physics.Arcade.Image
+
+    this.createLevelElements(groundY, h)
   }
 
-  private drawSkyArt(worldWidth: number, h: number) {
-    const v = this.template.sessionVariant
-    const back = this.add.tileSprite(worldWidth / 2, h / 2, worldWidth, h, '__WHITE').setTint(0x0b1220)
-    back.setAlpha(v?.skyBackAlpha ?? 0.56)
-    const mid = this.add.tileSprite(worldWidth / 2, h / 2, worldWidth, h, '__WHITE').setTint(0x17273d)
-    mid.setAlpha(v?.skyMidAlpha ?? 0.28)
-    const front = this.add.tileSprite(worldWidth / 2, h / 2, worldWidth, h, '__WHITE').setTint(0x274968)
-    front.setAlpha(v?.skyFrontAlpha ?? 0.16)
-    this.skyLayers = [back, mid, front]
+  private createLevelElements(groundY: number, h: number) {
+    const elements = this.template.levelElements?.elements ?? []
+    this.questionBlocks = this.physics.add.staticGroup()
+    this.pipes = this.physics.add.staticGroup()
+    this.checkpoints = this.physics.add.staticGroup()
 
-    const moon = this.add.circle(worldWidth * 0.82, h * 0.2, 44, 0xe7f3ff, 0.16)
-    moon.setScrollFactor(0.2)
-    this.add.circle(worldWidth * 0.82 - 14, h * 0.2 - 10, 30, 0x0b1220, 0.24).setScrollFactor(0.2)
-
-    const ridgeColors = [0x0f1b2f, 0x152742, 0x1e3556]
-    for (let layer = 0; layer < 3; layer++) {
-      const ridge = this.add.graphics()
-      ridge.fillStyle(ridgeColors[layer], 0.88 - layer * 0.16)
-      ridge.beginPath()
-      ridge.moveTo(0, h)
-      const peaks = Math.ceil(worldWidth / 120)
-      for (let i = 0; i <= peaks; i++) {
-        const x = (i / peaks) * worldWidth
-        const y =
-          h * (0.56 + layer * 0.09) +
-          Math.sin(i * (0.9 + layer * 0.22)) * (26 + layer * 12)
-        ridge.lineTo(x, y)
-      }
-      ridge.lineTo(worldWidth, h)
-      ridge.closePath()
-      ridge.fillPath()
-      ridge.setDepth(0.2 + layer * 0.2)
-      ridge.setScrollFactor(0.25 + layer * 0.15, 1)
-    }
-
-    const starCount = v?.skyStarCount ?? 140
-    const seed = this.template.sessionSeed
-    for (let i = 0; i < starCount; i++) {
-      if (seed) {
-        const rng = rngFromString(`${seed}|sky|${i}`)
-        this.add.circle(
-          intBetween(rng, 0, worldWidth),
-          intBetween(rng, 0, h - 100),
-          intBetween(rng, 1, 2),
-          0xffffff,
-          floatBetween(rng, 0.08, 0.78),
-        )
-      } else {
-        this.add.circle(
-          Phaser.Math.Between(0, worldWidth),
-          Phaser.Math.Between(0, h - 100),
-          Phaser.Math.Between(1, 2),
-          0xffffff,
-          Phaser.Math.FloatBetween(0.12, 0.7),
-        )
+    for (const el of elements) {
+      if (el.type === 'question') {
+        const block = this.questionBlocks.create(
+          this.worldWidth * el.xRatio,
+          groundY - el.yAboveGroundRatio * h - 16,
+          this.texKeys.questionBlock,
+        ) as Phaser.Physics.Arcade.Image
+        block.setData('used', false)
+        block.setData('reward', el.reward)
+        block.setDepth(2)
+        block.refreshBody()
+      } else if (el.type === 'pipe') {
+        const pipeH = el.heightRatio * h
+        const pipe = this.pipes.create(
+          this.worldWidth * el.xRatio,
+          groundY - pipeH / 2,
+          this.texKeys.pipe,
+        ) as Phaser.Physics.Arcade.Image
+        pipe.setScale(1, pipeH / 88)
+        pipe.setOrigin(0.5, 0.5)
+        pipe.setDepth(1)
+        pipe.setData('warpToX', this.worldWidth * el.warpToXRatio)
+        pipe.setData('lipY', groundY - pipeH + 4)
+        pipe.refreshBody()
+      } else if (el.type === 'checkpoint') {
+        const cp = this.checkpoints.create(
+          this.worldWidth * el.xRatio,
+          groundY - 30,
+          this.texKeys.checkpoint,
+        ) as Phaser.Physics.Arcade.Image
+        cp.setOrigin(0.5, 1)
+        cp.setDepth(2)
+        cp.setData('activated', false)
+        cp.refreshBody()
       }
     }
-
-    const vignette = this.add.graphics().setScrollFactor(0).setDepth(20)
-    vignette.fillStyle(0x04060c, 0.22)
-    vignette.fillRect(0, 0, worldWidth, 28)
-    vignette.fillRect(0, h - 46, worldWidth, 46)
   }
 
   private createPlayerAndSystems() {
-    const spawnX = this.scale.width * this.template.player.spawnXRatio
-    const spawnY =
+    const pal = getNintendoPalette(this.template.meta.theme)
+    this.spawnX = this.scale.width * this.template.player.spawnXRatio
+    this.spawnY =
       this.scale.height - this.template.player.spawnBottomOffsetRatio * this.scale.height
-    this.player = new Player(this, spawnX, spawnY, 'heroTex', this.template)
+
+    this.player = new Player(this, this.spawnX, this.spawnY, this.texKeys.hero, this.template)
     this.player.setScale(this.template.player.scale)
-    this.player.setBodySize(this.player.width * 0.72, this.player.height, true)
+    this.player.setCallbacks({
+      onLand: () => {
+        if (!this.player) return
+        emitLandDust(this, this.player.x, this.player.y + 20, pal, this.player.flipX)
+        squashOnLand(this.player, this)
+      },
+      onJump: () => {
+        if (!this.player) return
+        playSfx('jump')
+        stretchOnJump(this.player, this)
+      },
+    })
     this.physics.add.collider(this.player, this.platforms)
+
+    if (this.questionBlocks) {
+      this.physics.add.collider(this.player, this.questionBlocks, (playerObj, blockObj) => {
+        const player = playerObj as Player
+        const block = blockObj as Phaser.Physics.Arcade.Image
+        if (block.getData('used')) return
+        const body = player.body as Phaser.Physics.Arcade.Body | null
+        if (!body || body.velocity.y >= -40) return
+        const blockBottom = block.y + block.displayHeight * 0.45
+        const playerTop = player.y - player.displayHeight * 0.42
+        if (playerTop > blockBottom + 6) return
+        this.onQuestionBlockHit(block, pal)
+        body.setVelocityY(140)
+      })
+    }
+
+    if (this.pipes) {
+      this.physics.add.collider(this.player, this.pipes)
+    }
 
     const lerp = this.template.camera.followLerp
     this.cameras.main.startFollow(this.player, true, lerp, lerp)
+    this.cameras.main.setDeadzone(80, 40)
 
     this.enemies = []
     const h = this.scale.height
     const groundY = h - this.template.world.groundYOffsetRatio * h
-    const worldWidth = this.physics.world.bounds.width
+
     for (const s of this.template.enemies.spawn) {
-      const bridgeIndex = s.bridgeIndex
-      const bridge = this.template.platforms.floating[bridgeIndex]
+      const bridge = this.template.platforms.floating[s.bridgeIndex]
       if (!bridge) continue
-      const bridgeWidthPx = 210 * bridge.scaleX
-      const bridgeCenterX = worldWidth * bridge.xRatio
+      const bridgeWidthPx = this.platformWidth(bridge.scaleX)
+      const bridgeCenterX = this.worldWidth * bridge.xRatio
       const bridgeCenterY = groundY - bridge.yAboveGroundRatio * h
-      // Texture sizes in pixels (before scaling): platformNeoTex is 210x28, foeTex is 48x48.
-      // Enemies must visually sit on top of the bridge, and must not fall (gravity disabled).
-      const platformHeightPx = 28
-      const enemyHeightPx = 48
+      const platformHeightPx = 18
+      const enemyHeightPx = 36
       const enemyY = bridgeCenterY - (platformHeightPx + enemyHeightPx) / 2
-      // Keep enemies slightly away from bridge edges to avoid clipping/falling.
-      const edgeInsetPx = 14
+      const edgeInsetPx = 12
       const minX = bridgeCenterX - bridgeWidthPx / 2 + edgeInsetPx
       const maxX = bridgeCenterX + bridgeWidthPx / 2 - edgeInsetPx
       const enemy = new Enemy(
         this,
-        worldWidth * s.xRatio,
+        this.worldWidth * s.xRatio,
         enemyY,
-        'foeTex',
+        this.texKeys.enemy,
         this.template,
         s.direction,
         { minX, maxX },
       )
+      enemy.setScale(1.1)
       this.enemies.push(enemy)
     }
 
-    this.bullets = this.physics.add.group({ maxSize: 48 })
-    this.physics.add.collider(
-      this.bullets,
-      this.platforms,
-      (obj) => (obj as Phaser.Physics.Arcade.Image).disableBody(true, true),
+    this.bullets = this.physics.add.group({ maxSize: 32 })
+    this.physics.add.collider(this.bullets, this.platforms, (obj) =>
+      (obj as Phaser.Physics.Arcade.Image).disableBody(true, true),
     )
 
-    this.relics = this.physics.add.group({ allowGravity: true })
-    const relicCount = Math.max(1, this.template.platforms.floating.length)
-    this.remainingRelics = relicCount
-    this.totalRelics = relicCount
-    const floating =
-      this.template.platforms.floating.length
-        ? this.template.platforms.floating
-        : [{ xRatio: 0.5, yAboveGroundRatio: 110 / 540, scaleX: 0.8 }]
-    for (let i = 0; i < relicCount; i++) {
-      const p = floating[i % floating.length]
-      this.relics.create(
-        this.physics.world.bounds.width * p.xRatio,
-        groundY - p.yAboveGroundRatio * h - 44,
-        'relicTex',
-      )
-    }
-    this.physics.add.collider(this.relics, this.platforms)
+    this.powerUps = this.physics.add.group({ allowGravity: true, maxSize: 16 })
+    this.physics.add.collider(this.powerUps, this.platforms)
+    this.physics.add.overlap(this.player, this.powerUps, (_player, pu) => {
+      this.collectPowerUp(pu as Phaser.Physics.Arcade.Image)
+    })
 
-    this.physics.add.overlap(this.player, this.relics, (_player, token) => {
-      ;(token as Phaser.Physics.Arcade.Image).disableBody(true, true)
-      this.remainingRelics = Math.max(0, this.remainingRelics - 1)
-      this.score += this.template.sessionVariant?.relicScore ?? 120
+    if (this.checkpoints) {
+      this.physics.add.overlap(this.player, this.checkpoints, (_player, cpObj) => {
+        const cp = cpObj as Phaser.Physics.Arcade.Image
+        if (cp.getData('activated')) return
+        cp.setData('activated', true)
+        cp.setTexture(this.texKeys.checkpointActive)
+        this.checkpointActive = true
+        this.checkpointX = cp.x
+        this.checkpointY = cp.y - 36
+        playSfx('checkpoint')
+        this.showNotice('✓ CHECKPOINT!')
+        this.time.delayedCall(1200, () => {
+          if (!this.over) this.showNotice('')
+        })
+      })
+    }
+
+    this.coins = this.physics.add.group({ allowGravity: false })
+    const coinCount = Math.max(3, this.template.platforms.floating.length + 2)
+    this.totalCoins = coinCount
+    const floating = this.template.platforms.floating.length
+      ? this.template.platforms.floating
+      : [{ xRatio: 0.5, yAboveGroundRatio: 110 / 540, scaleX: 0.8 }]
+
+    for (let i = 0; i < coinCount; i++) {
+      const p = floating[i % floating.length]
+      const cx = this.worldWidth * p.xRatio + ((i % 3) - 1) * 18
+      const cy = groundY - p.yAboveGroundRatio * h - 36
+      const coin = this.coins.create(cx, cy, this.texKeys.coin) as Phaser.Physics.Arcade.Image
+      coin.setData('spinPhase', i * 0.7)
+    }
+
+    this.physics.add.overlap(this.player, this.coins, (_player, token) => {
+      const coin = token as Phaser.Physics.Arcade.Image
+      if (!coin.active) return
+      coin.disableBody(true, true)
+      this.coinsCollected++
+      this.score += COIN_VALUE
+      emitCoinSparkle(this, coin.x, coin.y, pal)
+    })
+
+    this.physics.add.overlap(this.player, this.flag, () => {
+      if (this.over) return
+      this.win()
     })
 
     this.physics.add.overlap(this.bullets, this.enemies, (b, e) => {
-      ;(b as Phaser.Physics.Arcade.Image).disableBody(true, true)
-      ;(e as Enemy).destroy()
+      const bullet = b as Phaser.Physics.Arcade.Image
+      const enemy = e as Enemy
+      if (enemy.isDead()) return
+      bullet.disableBody(true, true)
+      enemy.defeat()
       this.enemies = this.enemies.filter((x) => x.active)
-      this.score += this.template.sessionVariant?.enemyDestroyScore ?? 180
+      this.score += FIRE_SCORE
+      emitEnemyDefeat(this, enemy.x, enemy.y, pal)
     })
 
     this.physics.add.collider(this.player, this.enemies, () => {
-      if (this.over) return
-      // Platformer failure condition: touching a guarding enemy kills player.
-      this.health = 0
-      this.cameras.main.shake(100, 0.0032)
+      if (this.over || !this.player) return
+      const enemy = this.enemies.find(
+        (en) =>
+          en.active &&
+          !en.isDead() &&
+          Math.abs(en.x - this.player!.x) < en.displayWidth * 0.6,
+      )
+      if (!enemy) return
+
+      if (this.time.now < this.starUntil) {
+        enemy.defeat()
+        this.score += STOMP_SCORE
+        emitEnemyDefeat(this, enemy.x, enemy.y, pal)
+        this.enemies = this.enemies.filter((x) => x.active)
+        return
+      }
+
+      if (enemy.tryStomp(this.player)) {
+        this.score += STOMP_SCORE
+        emitEnemyDefeat(this, enemy.x, enemy.y, pal)
+        emitStompBounce(this, this.player)
+        this.enemies = this.enemies.filter((x) => x.active)
+        return
+      }
+
+      if (this.time.now < this.invincibleUntil) return
+      this.takeDamage()
+    })
+  }
+
+  private onQuestionBlockHit(block: Phaser.Physics.Arcade.Image, pal: ReturnType<typeof getNintendoPalette>) {
+    playSfx('blockHit')
+    block.setData('used', true)
+    block.setTexture(this.texKeys.questionBlockUsed)
+    this.tweens.add({
+      targets: block,
+      y: block.y - 10,
+      duration: 90,
+      yoyo: true,
+      ease: 'Sine.easeOut',
+    })
+
+    const reward = block.getData('reward') as QuestionBlockReward
+    if (reward === 'coin') {
+      this.coinsCollected++
+      this.totalCoins++
+      this.score += COIN_VALUE
+      emitCoinSparkle(this, block.x, block.y - 18, pal)
+      return
+    }
+    this.spawnPowerUpFromBlock(block.x, block.y - 28, reward)
+  }
+
+  private spawnPowerUpFromBlock(x: number, y: number, reward: QuestionBlockReward) {
+    const tex =
+      reward === 'flower'
+        ? this.texKeys.flower
+        : reward === 'star'
+          ? this.texKeys.star
+          : this.texKeys.mushroom
+    const pu = this.powerUps.create(x, y, tex) as Phaser.Physics.Arcade.Image
+    if (!pu) return
+    pu.setData('reward', reward)
+    pu.setDepth(6)
+    pu.setVelocity(reward === 'mushroom' || reward === '1up' ? 75 : 0, -200)
+    pu.setBounce(0.35)
+    pu.setCollideWorldBounds(true)
+    this.time.delayedCall(500, () => {
+      if (pu.active && (reward === 'mushroom' || reward === '1up')) {
+        pu.setVelocityX(75)
+      }
+    })
+  }
+
+  private collectPowerUp(pu: Phaser.Physics.Arcade.Image) {
+    if (!pu.active) return
+    const reward = pu.getData('reward') as QuestionBlockReward
+    pu.disableBody(true, true)
+    playSfx('powerUp')
+
+    switch (reward) {
+      case 'mushroom':
+        this.lives++
+        this.showNotice('🍄 1 UP!')
+        break
+      case '1up':
+        this.lives++
+        this.showNotice('🍄 EXTRA LIFE!')
+        break
+      case 'flower':
+        this.hasFlower = true
+        if (this.player) this.player.setTint(0xffcc88)
+        this.showNotice('🌸 FIRE POWER!')
+        break
+      case 'star':
+        this.starUntil = this.time.now + STAR_DURATION_MS
+        this.showNotice('⭐ STAR POWER!')
+        break
+      default:
+        break
+    }
+    this.time.delayedCall(1100, () => {
+      if (!this.over) this.showNotice('')
+    })
+  }
+
+  private tryPipeWarp() {
+    if (!this.player || this.over) return
+    const down =
+      this.downKey.isDown ||
+      this.cursors.down.isDown ||
+      isCodeDown('KeyS')
+    if (!down) return
+
+    const body = this.player.body as Phaser.Physics.Arcade.Body | null
+    if (!body) return
+
+    for (const child of this.pipes.getChildren()) {
+      const pipe = child as Phaser.Physics.Arcade.Image
+      const lipY = pipe.getData('lipY') as number
+      const warpX = pipe.getData('warpToX') as number
+      const dx = Math.abs(this.player.x - pipe.x)
+      const onTop = this.player.y <= lipY + 8 && this.player.y >= lipY - 40
+      if (dx > 34 || !onTop) continue
+      if (!body.blocked.down && !body.touching.down) continue
+
+      this.player.setPosition(warpX, lipY - 8)
+      this.player.setVelocity(0, 0)
+      playSfx('powerUp')
+      this.cameras.main.flash(120, 200, 255, 200, false)
+      this.showNotice('🟢 WARP!')
+      this.time.delayedCall(700, () => {
+        if (!this.over) this.showNotice('')
+      })
+      break
+    }
+  }
+
+  private respawnPlayer() {
+    if (!this.player) return
+    const x = this.checkpointActive ? this.checkpointX : this.spawnX
+    const y = this.checkpointActive ? this.checkpointY : this.spawnY
+    this.player.setPosition(x, y)
+    this.player.setVelocity(0, 0)
+    this.invincibleUntil = this.time.now + INVINCIBLE_MS * 2
+    this.hasFlower = false
+    this.player.clearTint()
+    this.player.setAlpha(1)
+  }
+
+  private takeDamage() {
+    if (!this.player || this.over) return
+    if (this.time.now < this.starUntil) return
+
+    this.lives--
+    playSfx('hurt')
+    screenShake(this, 0.006, 120)
+
+    if (this.lives <= 0) {
       this.lose()
+      return
+    }
+
+    this.respawnPlayer()
+    this.showNotice(`OUCH! ♥×${this.lives}`)
+    this.time.delayedCall(800, () => {
+      if (!this.over) this.showNotice('')
+    })
+  }
+
+  private updateInvincibility(now: number) {
+    if (!this.player) return
+
+    if (now < this.starUntil) {
+      const colors = [0xffff00, 0xff8800, 0xff0088, 0x00ffff]
+      this.player.setTint(colors[Math.floor(now / 80) % colors.length])
+      this.player.setAlpha(1)
+      return
+    }
+
+    if (now >= this.invincibleUntil) {
+      this.player.clearTint()
+      if (this.hasFlower) this.player.setTint(0xffcc88)
+      this.player.setAlpha(1)
+      return
+    }
+    this.player.setAlpha(Math.sin(now * 0.02) > 0 ? 1 : 0.45)
+  }
+
+  private animateCoins(time: number) {
+    this.coins.getChildren().forEach((child) => {
+      const coin = child as Phaser.Physics.Arcade.Image
+      if (!coin.active) return
+      const phase = (coin.getData('spinPhase') as number) ?? 0
+      const scaleX = 0.6 + Math.abs(Math.sin(time * 0.006 + phase)) * 0.5
+      coin.setScale(scaleX, 1)
+      coin.y += Math.sin(time * 0.004 + phase) * 0.15
     })
   }
 
   private tryShoot() {
-    const cd = this.template.sessionVariant?.bulletCooldownMs ?? 160
+    const baseCd = this.template.sessionVariant?.bulletCooldownMs ?? 220
+    const cd = this.hasFlower ? baseCd * 0.5 : baseCd
     if (!this.player || this.time.now - this.lastShotAt < cd) return
     this.lastShotAt = this.time.now
+    playSfx('shoot')
     const bullet = this.bullets.get(
       this.player.x,
-      this.player.y - 2,
-      'shotTex',
+      this.player.y - 4,
+      this.texKeys.fireball,
     ) as Phaser.Physics.Arcade.Image | null
     if (!bullet) return
-    bullet.enableBody(true, this.player.x, this.player.y - 2, true, true)
-    bullet.setActive(true).setVisible(true).setDepth(7)
-    const vx = this.template.sessionVariant?.bulletSpeedX ?? 640
+    bullet.enableBody(true, this.player.x, this.player.y - 4, true, true)
+    bullet.setActive(true).setVisible(true).setDepth(7).setScale(this.hasFlower ? 1.45 : 1.2)
+    const vx = this.template.sessionVariant?.bulletSpeedX ?? 520
     bullet.setVelocityX(this.player.flipX ? -vx : vx)
-    this.time.delayedCall(1200, () => bullet.active && bullet.disableBody(true, true))
+    bullet.setVelocityY(-40)
+    this.time.delayedCall(1400, () => bullet.active && bullet.disableBody(true, true))
   }
 
   private createHud() {
-    const hud = this.add.graphics().setDepth(28).setScrollFactor(0)
-    hud.fillStyle(0x060a14, 0.62)
-    hud.fillRoundedRect(10, 10, 432, 88, 12)
-    hud.lineStyle(1, 0x5cd9ff, 0.45)
-    hud.strokeRoundedRect(10, 10, 432, 88, 12)
-    hud.fillStyle(0xffffff, 0.08)
-    hud.fillRect(24, 56, 180, 8)
-    hud.fillRect(24, 76, 180, 8)
-    this.hudChrome = hud
+    const pal = getNintendoPalette(this.template.meta.theme)
 
     this.hudText = this.add
-      .text(16, 16, '', {
+      .text(12, 10, '', {
         fontFamily: HUD_FONT,
-        fontSize: '13px',
-        color: '#e6edf7',
-        lineSpacing: 4,
+        fontSize: '11px',
+        color: pal.hudText,
+        lineSpacing: 8,
+        stroke: '#000000',
+        strokeThickness: 4,
       })
       .setDepth(30)
       .setScrollFactor(0)
+
     this.noticeText = this.add
-      .text(this.scale.width / 2, 18, '', {
+      .text(this.scale.width / 2, this.scale.height * 0.38, '', {
         fontFamily: HUD_FONT,
-        fontSize: '18px',
+        fontSize: '16px',
         color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 5,
+        align: 'center',
       })
-      .setOrigin(0.5, 0)
+      .setOrigin(0.5)
       .setDepth(32)
       .setScrollFactor(0)
+
     this.updateHud()
   }
 
   private updateHud() {
     if (!this.hudText) return
-    const alive = this.enemies.filter((e) => e.active).length
-    const hpNorm = Phaser.Math.Clamp(this.health / 100, 0, 1)
-    const progressNorm =
-      1 -
-      Phaser.Math.Clamp(
-        (alive + this.remainingRelics) /
-          Math.max(1, this.template.enemies.spawn.length + this.totalRelics),
-        0,
-        1,
-      )
+    const world = this.template.meta.theme.toUpperCase().slice(0, 3)
+    const enemiesLeft = this.enemies.filter((e) => e.active && !e.isDead()).length
 
-    if (this.hudChrome) {
-      this.hudChrome.clear()
-      this.hudChrome.fillStyle(0x060a14, 0.62)
-      this.hudChrome.fillRoundedRect(10, 10, 432, 88, 12)
-      this.hudChrome.lineStyle(1, 0x5cd9ff, 0.45)
-      this.hudChrome.strokeRoundedRect(10, 10, 432, 88, 12)
-      this.hudChrome.fillStyle(0xffffff, 0.08)
-      this.hudChrome.fillRect(24, 56, 180, 8)
-      this.hudChrome.fillRect(24, 76, 180, 8)
-      this.hudChrome.fillStyle(0x3bff8f, 0.92)
-      this.hudChrome.fillRect(24, 56, 180 * hpNorm, 8)
-      this.hudChrome.fillStyle(0x59d7ff, 0.92)
-      this.hudChrome.fillRect(24, 76, 180 * progressNorm, 8)
-    }
+    const starTag = this.time.now < this.starUntil ? ' ⭐' : this.hasFlower ? ' 🌸' : ''
+    const cpTag = this.checkpointActive ? ' ✓CP' : ''
 
     this.hudText.setText(
       [
-        `SCORE ${this.score}   HP ${this.health}`,
-        `ENEMIES ${alive}   RELICS ${this.remainingRelics}`,
-        `MODE PLATFORMER   THEME ${this.template.meta.theme.toUpperCase()}`,
-        'Keyboard: WASD Move/Jump, J Shoot | P Pause',
+        `🪙 ${String(this.coinsCollected).padStart(2, '0')}/${String(this.totalCoins).padStart(2, '0')}   ★ ${this.score}`,
+        `♥ ×${this.lives}   👾 ${enemiesLeft}   ${world}-1${cpTag}${starTag}`,
+        'Move/Jump · J Fire · ? Blocks · S+Pipe · → Flag',
       ].join('\n'),
     )
-  }
-
-  private scrollBackground() {
-    const sx = this.cameras.main.scrollX
-    const v = this.template.sessionVariant
-    const pb = v?.parallaxBack ?? 0.06
-    const pm = v?.parallaxMid ?? 0.12
-    const pf = v?.parallaxFront ?? 0.2
-    if (this.skyLayers[0]) this.skyLayers[0].tilePositionX = sx * pb
-    if (this.skyLayers[1]) this.skyLayers[1].tilePositionX = sx * pm
-    if (this.skyLayers[2]) this.skyLayers[2].tilePositionX = sx * pf
-  }
-
-  private checkResult() {
-    // Platformer win condition: collect all money/relics.
-    if (this.remainingRelics === 0) this.win()
   }
 
   private win() {
     this.over = true
     this.physics.world.isPaused = true
-    this.showNotice('VICTORY // PRESS R TO RESTART')
-    this.enableRestart()
+    flagCelebration(this, this.flag.x, this.flag.y)
+    this.showNotice('🚩 WORLD CLEAR!\nPRESS R TO PLAY AGAIN')
   }
 
   private lose() {
     this.over = true
     this.physics.world.isPaused = true
-    this.showNotice('DEFEAT // PRESS R TO RETRY')
-    this.enableRestart()
+    playSfx('lose')
+    this.showNotice('💀 GAME OVER\nPRESS R TO RETRY')
   }
 
   private showNotice(text: string) {
     if (this.noticeText) this.noticeText.setText(text)
   }
-
-  private enableRestart() {
-    // No-op: restart is handled in `update()` for reliability.
-    // Kept only so win/lose can call enableRestart() without refactoring.
-    this.restartListenerAdded = true
-  }
-
-  // Mouse/touch/tilt input intentionally removed: keyboard-only gameplay.
 }
-

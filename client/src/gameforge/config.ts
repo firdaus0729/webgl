@@ -89,18 +89,50 @@ export type PlatformerTemplateConfig = {
   /** Set when built via `buildPlatformerTemplateFromConfig` (client-side procedural runs). */
   sessionSeed?: string
   sessionVariant?: SessionVisualVariant
+  levelElements?: LevelElementsConfig
+}
+
+export type QuestionBlockReward = 'coin' | 'mushroom' | 'flower' | 'star' | '1up'
+
+export type LevelPipeElement = {
+  type: 'pipe'
+  xRatio: number
+  /** Pipe height as ratio of screen height */
+  heightRatio: number
+  warpToXRatio: number
+}
+
+export type LevelQuestionElement = {
+  type: 'question'
+  xRatio: number
+  yAboveGroundRatio: number
+  reward: QuestionBlockReward
+}
+
+export type LevelCheckpointElement = {
+  type: 'checkpoint'
+  xRatio: number
+}
+
+export type LevelElement =
+  | LevelPipeElement
+  | LevelQuestionElement
+  | LevelCheckpointElement
+
+export type LevelElementsConfig = {
+  elements: LevelElement[]
 }
 
 // Default template config for the MVP platformer.
 export const PLATFORMER_TEMPLATE_CONFIG: PlatformerTemplateConfig = {
   world: {
     widthScale: 1.7,
-    gravityY: 1200,
-    groundYOffsetRatio: 54 / 540,
+    gravityY: 1400,
+    groundYOffsetRatio: 48 / 540,
   },
   player: {
     moveSpeed: 260,
-    jumpSpeed: 520,
+    jumpSpeed: 540,
     spawnXRatio: 0.22,
     spawnBottomOffsetRatio: 160 / 540,
     scale: 0.95,
@@ -140,11 +172,11 @@ export const PLATFORMER_TEMPLATE_CONFIG: PlatformerTemplateConfig = {
     followLerp: 0.08,
   },
   theme: {
-    backgroundColor: '#001b20',
-    playerFill: 0x01a4f3,
-    playerStroke: 0x02a955,
-    platformFill: 0x02a955,
-    platformStroke: 0x01a4f3,
+    backgroundColor: '#5c94fc',
+    playerFill: 0xe52521,
+    playerStroke: 0x2150d0,
+    platformFill: 0x00a844,
+    platformStroke: 0xc84c0c,
   },
 }
 

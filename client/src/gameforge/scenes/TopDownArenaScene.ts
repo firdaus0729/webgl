@@ -4,18 +4,17 @@ import type { GameConfig } from '../GameConfig'
 import { buildPlatformerTemplateFromConfig } from '../buildPlatformerTemplateFromConfig'
 import { attachGlobalInput, detachGlobalInput, isCodeDown } from '../inputState'
 import { createSessionSeed, intBetween, rngFromString } from '../sessionSeed'
+import { emitEnemyDefeat, screenShake } from '../nintendo/GameJuice'
+import { createArenaBackground, RETRO_HUD_FONT } from '../nintendo/ModeBackgrounds'
+import { createArenaTextures, getNintendoPalette } from '../nintendo/ModeSprites'
+import { playSfx } from '../nintendo/ChiptuneAudio'
 
-type ArenaEnemy = Phaser.Physics.Arcade.Image & {
-  hp: number
-  maxHp: number
-}
+type ArenaEnemy = Phaser.Physics.Arcade.Image & { hp: number; maxHp: number }
 
-const HUD_FONT = 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+const START_LIVES = 3
+const INVINCIBLE_MS = 900
+const KILL_SCORE = 120
 
-/**
- * Top-down arena: 8-way movement, shoot toward aim vector (last move / default up).
- * Enemies spawn at arena edges and chase the player.
- */
 export default class TopDownArenaScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Image
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
@@ -29,14 +28,15 @@ export default class TopDownArenaScene extends Phaser.Scene {
   private bullets!: Phaser.Physics.Arcade.Group
   private enemies!: Phaser.Physics.Arcade.Group
   private configData: GameConfig | null = null
+  private theme: GameConfig['theme'] = 'cartoon'
   private score = 0
-  private hp = 100
+  private lives = START_LIVES
   private paused = false
   private gameOver = false
   private lastShotAt = 0
+  private invincibleUntil = 0
   private hudText: Phaser.GameObjects.Text | null = null
   private noticeText: Phaser.GameObjects.Text | null = null
-  private hudChrome: Phaser.GameObjects.Graphics | null = null
   private restartKeyHeld = false
   private aimX = 0
   private aimY = -1
@@ -47,10 +47,9 @@ export default class TopDownArenaScene extends Phaser.Scene {
   private totalSpawned = 0
   private targetKills = 0
   private kills = 0
-  private lastPlayerHitAt = 0
-  private hudBannerLine = ''
   private sessionSeed = ''
   private arenaMoveMul = 1
+  private texKeys!: ReturnType<typeof createArenaTextures>
 
   constructor() {
     super('TopDownArenaScene')
@@ -63,58 +62,34 @@ export default class TopDownArenaScene extends Phaser.Scene {
 
   create() {
     this.score = 0
-    this.hp = 100
+    this.lives = START_LIVES
     this.paused = false
     this.gameOver = false
     this.lastShotAt = 0
+    this.invincibleUntil = 0
     this.kills = 0
     this.totalSpawned = 0
-    this.lastPlayerHitAt = 0
     this.aimX = 0
     this.aimY = -1
 
     const cfg = this.configData ?? {
       gameType: 'top_down_arena' as const,
-      theme: 'cyberpunk',
-      difficulty: 'medium',
-      enemyType: 'drones',
-      enemyDensity: 'medium',
-      platformDensity: 'medium',
-      levelSize: 'medium',
+      theme: 'cartoon' as const,
+      difficulty: 'medium' as const,
+      enemyType: 'drones' as const,
+      enemyDensity: 'medium' as const,
+      platformDensity: 'medium' as const,
+      levelSize: 'medium' as const,
     }
     this.configData = cfg
+    this.theme = cfg.theme
     if (!this.sessionSeed) this.sessionSeed = createSessionSeed()
     const template = buildPlatformerTemplateFromConfig(cfg, this.sessionSeed)
     this.arenaMoveMul = template.sessionVariant?.arenaPlayerSpeedMul ?? 1
 
-    this.cameras.main.setBackgroundColor(template.theme.backgroundColor)
-    this.cursors = this.input.keyboard!.createCursorKeys()
-    this.shootKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.J)
-    this.pauseKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.P)
-    this.upKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W)
-    this.downKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S)
-    this.leftKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A)
-    this.rightKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D)
-    this.restartKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.R)
-
-    this.onGlobalRestartKeyDown = (e: KeyboardEvent) => {
-      const isR = e.code === 'KeyR' || e.key === 'r' || e.key === 'R'
-      if (!isR) return
-      if (!this.gameOver) return
-      if (this.restartKeyHeld) return
-      this.restartKeyHeld = true
-      this.scene.restart({ config: this.configData, sessionSeed: this.sessionSeed })
-    }
-    this.onGlobalRestartKeyUp = (e: KeyboardEvent) => {
-      const isR = e.code === 'KeyR' || e.key === 'r' || e.key === 'R'
-      if (!isR) return
-      this.restartKeyHeld = false
-    }
-    window.addEventListener('keydown', this.onGlobalRestartKeyDown, this.restartCaptureOptions)
-    window.addEventListener('keyup', this.onGlobalRestartKeyUp, this.restartCaptureOptions)
-
-    this.createTextures(template.theme.playerFill, template.theme.platformStroke)
-    this.drawArena(template.theme.platformStroke)
+    this.bindRestartKeys()
+    this.texKeys = createArenaTextures(this, cfg.theme, cfg.enemyType)
+    createArenaBackground(this, cfg.theme)
     this.createPlayer()
     this.createPools()
     this.computeWaveTargets(cfg, template.sessionVariant?.arenaKillTargetMul ?? 1)
@@ -129,9 +104,31 @@ export default class TopDownArenaScene extends Phaser.Scene {
     })
   }
 
+  private bindRestartKeys() {
+    this.cursors = this.input.keyboard!.createCursorKeys()
+    this.shootKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.J)
+    this.pauseKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.P)
+    this.upKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W)
+    this.downKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S)
+    this.leftKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A)
+    this.rightKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D)
+    this.restartKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.R)
+
+    this.onGlobalRestartKeyDown = (e: KeyboardEvent) => {
+      const isR = e.code === 'KeyR' || e.key === 'r' || e.key === 'R'
+      if (!isR || !this.gameOver || this.restartKeyHeld) return
+      this.restartKeyHeld = true
+      this.scene.restart({ config: this.configData, sessionSeed: this.sessionSeed })
+    }
+    this.onGlobalRestartKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'KeyR' || e.key === 'r' || e.key === 'R') this.restartKeyHeld = false
+    }
+    window.addEventListener('keydown', this.onGlobalRestartKeyDown, this.restartCaptureOptions)
+    window.addEventListener('keyup', this.onGlobalRestartKeyUp, this.restartCaptureOptions)
+  }
+
   private computeWaveTargets(cfg: GameConfig, killMul: number) {
-    const base =
-      cfg.enemyDensity === 'low' ? 10 : cfg.enemyDensity === 'high' ? 24 : 16
+    const base = cfg.enemyDensity === 'low' ? 10 : cfg.enemyDensity === 'high' ? 24 : 16
     const scaled =
       cfg.levelSize === 'large' ? base + 6 : cfg.levelSize === 'small' ? Math.max(6, base - 4) : base
     this.targetKills = Math.max(6, Math.round(scaled * killMul))
@@ -145,8 +142,7 @@ export default class TopDownArenaScene extends Phaser.Scene {
     const batch = Math.min(remaining, cfg.enemyDensity === 'high' ? 7 : cfg.enemyDensity === 'low' ? 4 : 5)
     if (batch <= 0) return
 
-    const speedBase =
-      cfg.difficulty === 'hard' ? 95 : cfg.difficulty === 'easy' ? 55 : 75
+    const speedBase = cfg.difficulty === 'hard' ? 100 : cfg.difficulty === 'easy' ? 58 : 78
 
     for (let i = 0; i < batch; i++) {
       const rng = rngFromString(`${this.sessionSeed}|arena|${this.totalSpawned}|${i}`)
@@ -167,8 +163,8 @@ export default class TopDownArenaScene extends Phaser.Scene {
         y = intBetween(rng, pad, h - pad)
       }
 
-      const enemy = this.enemies.create(x, y, 'arenaEnemyTex') as ArenaEnemy
-      enemy.setImmovable(true)
+      const enemy = this.enemies.create(x, y, this.texKeys.enemy) as ArenaEnemy
+      enemy.setImmovable(true).setScale(1.1)
       enemy.setData('speed', speedBase + intBetween(rng, -8, 18))
       const maxHp = cfg.difficulty === 'hard' ? 3 : cfg.difficulty === 'easy' ? 1 : 2
       enemy.hp = maxHp
@@ -191,28 +187,19 @@ export default class TopDownArenaScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.pauseKey)) {
       this.paused = !this.paused
       this.physics.world.isPaused = this.paused
-      this.showNotice(this.paused ? 'PAUSED' : '')
+      if (this.paused) playSfx('pause')
+      this.showNotice(this.paused ? '⏸ PAUSED' : '')
     }
     if (this.paused) return
 
-    const speed = 300 * this.arenaMoveMul
-    const leftDown =
-      Number(this.cursors.left.isDown) +
-      Number(this.leftKey.isDown) +
-      Number(isCodeDown('KeyA'))
-    const rightDown =
-      Number(this.cursors.right.isDown) +
-      Number(this.rightKey.isDown) +
-      Number(isCodeDown('KeyD'))
-    const upDown =
-      Number(this.cursors.up.isDown) + Number(this.upKey.isDown) + Number(isCodeDown('KeyW'))
-    const downDown =
-      Number(this.cursors.down.isDown) +
-      Number(this.downKey.isDown) +
-      Number(isCodeDown('KeyS'))
+    const speed = 310 * this.arenaMoveMul
+    const ix =
+      Number(this.cursors.right.isDown || this.rightKey.isDown || isCodeDown('KeyD')) -
+      Number(this.cursors.left.isDown || this.leftKey.isDown || isCodeDown('KeyA'))
+    const iy =
+      Number(this.cursors.down.isDown || this.downKey.isDown || isCodeDown('KeyS')) -
+      Number(this.cursors.up.isDown || this.upKey.isDown || isCodeDown('KeyW'))
 
-    const ix = Number(rightDown > 0) - Number(leftDown > 0)
-    const iy = Number(downDown > 0) - Number(upDown > 0)
     const v = new Phaser.Math.Vector2(ix, iy)
     if (v.lengthSq() > 0) {
       v.normalize().scale(speed)
@@ -223,9 +210,7 @@ export default class TopDownArenaScene extends Phaser.Scene {
       this.player.setVelocity(0, 0)
     }
 
-    if (this.shootKey.isDown || this.cursors.space.isDown) {
-      this.tryShoot()
-    }
+    if (this.shootKey.isDown || this.cursors.space.isDown) this.tryShoot()
 
     const pad = this.arenaPad
     this.player.x = Phaser.Math.Clamp(this.player.x, pad, this.scale.width - pad)
@@ -233,12 +218,15 @@ export default class TopDownArenaScene extends Phaser.Scene {
 
     const cfg = this.configData
     if (!cfg) return
+
+    const t = this.time.now
     for (const child of this.enemies.getChildren()) {
       const enemy = child as ArenaEnemy
       if (!enemy.active) continue
       const ang = Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y)
       const sp = enemy.getData('speed') as number
       enemy.setVelocity(Math.cos(ang) * sp, Math.sin(ang) * sp)
+      enemy.setScale(1.1 + Math.sin(t * 0.01 + enemy.x) * 0.05)
     }
 
     if (
@@ -249,90 +237,19 @@ export default class TopDownArenaScene extends Phaser.Scene {
       this.spawnWave(cfg)
     }
 
-    if (this.kills >= this.targetKills && this.enemies.countActive(true) === 0) {
-      this.win()
-    }
+    if (this.kills >= this.targetKills && this.enemies.countActive(true) === 0) this.win()
 
-    this.updateHudText()
-  }
-
-  private drawArena(accent: number) {
-    const w = this.scale.width
-    const h = this.scale.height
-    const pad = this.arenaPad
-
-    this.add.rectangle(w / 2, h / 2, w, h, 0x070b13, 0.7).setDepth(0)
-    this.add.circle(w * 0.5, h * 0.52, h * 0.35, accent, 0.12).setDepth(0)
-    this.add.circle(w * 0.28, h * 0.24, h * 0.22, 0xff4aa1, 0.08).setDepth(0)
-    this.add.circle(w * 0.78, h * 0.2, h * 0.2, 0x37b6ff, 0.08).setDepth(0)
-
-    const g = this.add.graphics().setDepth(1)
-    g.lineStyle(1, 0xffffff, 0.08)
-    for (let x = pad; x <= w - pad; x += 34) g.lineBetween(x, pad, x, h - pad)
-    for (let y = pad; y <= h - pad; y += 34) g.lineBetween(pad, y, w - pad, y)
-
-    g.lineStyle(4, accent, 0.45)
-    g.strokeRoundedRect(pad - 8, pad - 8, w - (pad - 8) * 2, h - (pad - 8) * 2, 18)
-    g.lineStyle(2, 0xffffff, 0.16)
-    g.strokeRoundedRect(pad + 12, pad + 12, w - (pad + 12) * 2, h - (pad + 12) * 2, 14)
-
-    // Arena center ring motif (closer to premium fighter/arena samples).
-    const centerX = w / 2
-    const centerY = h / 2
-    g.lineStyle(3, 0xa6ebff, 0.45)
-    g.strokeCircle(centerX, centerY, 95)
-    g.lineStyle(2, 0xffffff, 0.12)
-    g.strokeCircle(centerX, centerY, 140)
-  }
-
-  private createTextures(primary: number, accent: number) {
-    const g = this.make.graphics({ x: 0, y: 0 })
-
-    // Player: layered core + ring to avoid vague blob look.
-    g.fillStyle(0x04070f, 0.35)
-    g.fillEllipse(20, 36, 24, 8)
-    g.fillGradientStyle(primary, primary, accent, accent, 1)
-    g.fillCircle(20, 20, 16)
-    g.lineStyle(3, 0x0a0d14, 0.34)
-    g.strokeCircle(20, 20, 16)
-    g.fillStyle(0xffffff, 0.92)
-    g.fillCircle(24, 16, 4)
-    g.fillStyle(accent, 0.78)
-    g.fillCircle(20, 20, 7)
-    g.generateTexture('arenaPlayerTex', 40, 42)
-
-    g.clear()
-    g.fillStyle(0x04070f, 0.34)
-    g.fillEllipse(19, 34, 22, 8)
-    g.fillGradientStyle(0xff4b6f, 0xff4b6f, 0x572de6, 0x572de6, 1)
-    g.fillRoundedRect(4, 4, 30, 30, 8)
-    g.fillStyle(0xffffff, 0.95)
-    g.fillCircle(14, 19, 3)
-    g.fillCircle(24, 19, 3)
-    g.fillStyle(0x1a2030, 0.75)
-    g.fillRoundedRect(12, 24, 14, 5, 3)
-    g.lineStyle(2, 0xffffff, 0.2)
-    g.strokeRoundedRect(4, 4, 30, 30, 8)
-    g.generateTexture('arenaEnemyTex', 38, 40)
-
-    g.clear()
-    g.fillStyle(0xfff6d2, 0.98)
-    g.fillCircle(6, 6, 5)
-    g.fillStyle(accent, 0.85)
-    g.fillCircle(6, 6, 2)
-    g.generateTexture('arenaBulletTex', 12, 12)
-    g.destroy()
+    this.updateInvincibility()
+    this.updateHud()
   }
 
   private createPlayer() {
     this.player = this.physics.add.image(
       this.scale.width / 2,
       this.scale.height / 2,
-      'arenaPlayerTex',
+      this.texKeys.player,
     )
-    this.player.setCollideWorldBounds(true)
-    this.player.setDepth(6)
-    this.player.setMaxVelocity(400, 400)
+    this.player.setCollideWorldBounds(true).setDepth(6).setMaxVelocity(420, 420).setScale(1.15)
   }
 
   private createPools() {
@@ -341,8 +258,9 @@ export default class TopDownArenaScene extends Phaser.Scene {
   }
 
   private tryShoot() {
-    if (this.time.now - this.lastShotAt < 95) return
+    if (this.time.now - this.lastShotAt < 110) return
     this.lastShotAt = this.time.now
+    playSfx('shoot')
 
     let ax = this.aimX
     let ay = this.aimY
@@ -355,107 +273,93 @@ export default class TopDownArenaScene extends Phaser.Scene {
       ay /= len
     }
 
-    const bullet = this.bullets.get(
-      this.player.x + ax * 22,
-      this.player.y + ay * 22,
-      'arenaBulletTex',
-    ) as Phaser.Physics.Arcade.Image | null
+    const bx = this.player.x + ax * 20
+    const by = this.player.y + ay * 20
+    const bullet = this.bullets.get(bx, by, this.texKeys.bullet) as Phaser.Physics.Arcade.Image | null
     if (!bullet) return
-    bullet.enableBody(true, this.player.x + ax * 22, this.player.y + ay * 22, true, true)
-    bullet.setActive(true).setVisible(true).setDepth(8)
-    const bulletSpeed = 720
-    bullet.setVelocity(ax * bulletSpeed, ay * bulletSpeed)
-    this.time.delayedCall(1400, () => {
-      if (bullet.active) bullet.disableBody(true, true)
-    })
+    bullet.enableBody(true, bx, by, true, true).setActive(true).setVisible(true).setDepth(8)
+    bullet.setVelocity(ax * 740, ay * 740)
+    this.time.delayedCall(1300, () => bullet.active && bullet.disableBody(true, true))
   }
 
   private registerCollisions() {
+    const pal = getNintendoPalette(this.theme)
+
     this.physics.add.overlap(this.bullets, this.enemies, (bulletObj, enemyObj) => {
       const bullet = bulletObj as Phaser.Physics.Arcade.Image
       const enemy = enemyObj as ArenaEnemy
       bullet.disableBody(true, true)
       enemy.hp -= 1
+      enemy.setTint(0xffffff)
+      this.time.delayedCall(40, () => enemy.active && enemy.clearTint())
+
       if (enemy.hp <= 0) {
+        emitEnemyDefeat(this, enemy.x, enemy.y, pal)
         enemy.disableBody(true, true)
         this.kills += 1
-        this.score += 120
-        this.cameras.main.shake(40, 0.002)
+        this.score += KILL_SCORE
+        screenShake(this, 0.003, 50)
       }
     })
 
     this.physics.add.overlap(this.player, this.enemies, () => {
-      if (this.gameOver) return
-      if (this.time.now - this.lastPlayerHitAt < 420) return
-      this.lastPlayerHitAt = this.time.now
-      this.hp = Math.max(0, this.hp - 12)
-      this.cameras.main.shake(100, 0.0035)
-      if (this.hp <= 0) {
-        this.fail()
-      }
+      if (this.gameOver || this.time.now < this.invincibleUntil) return
+      this.lives--
+      playSfx('hurt')
+      screenShake(this, 0.005, 90)
+      this.invincibleUntil = this.time.now + INVINCIBLE_MS
+      if (this.lives <= 0) this.fail()
     })
   }
 
-  private createHud(cfg: GameConfig) {
-    const hud = this.add.graphics().setDepth(29).setScrollFactor(0)
-    hud.fillStyle(0x070b17, 0.64)
-    hud.fillRoundedRect(10, 10, 420, 92, 12)
-    hud.lineStyle(1, 0x69e2ff, 0.45)
-    hud.strokeRoundedRect(10, 10, 420, 92, 12)
-    hud.fillStyle(0xffffff, 0.08)
-    hud.fillRect(24, 58, 170, 8)
-    hud.fillRect(24, 78, 170, 8)
-    this.hudChrome = hud
+  private updateInvincibility() {
+    if (this.time.now >= this.invincibleUntil) {
+      this.player.clearTint()
+      this.player.setAlpha(1)
+      return
+    }
+    this.player.setAlpha(Math.sin(this.time.now * 0.028) > 0 ? 1 : 0.35)
+  }
 
+  private createHud(cfg: GameConfig) {
+    const pal = getNintendoPalette(cfg.theme)
     this.hudText = this.add
-      .text(14, 14, '', {
-        fontFamily: HUD_FONT,
-        fontSize: '13px',
-        color: '#E5E7EB',
-        lineSpacing: 4,
+      .text(12, 10, '', {
+        fontFamily: RETRO_HUD_FONT,
+        fontSize: '10px',
+        color: pal.hudText,
+        lineSpacing: 8,
+        stroke: '#000000',
+        strokeThickness: 4,
       })
       .setDepth(30)
       .setScrollFactor(0)
 
     this.noticeText = this.add
-      .text(this.scale.width / 2, 16, '', {
-        fontFamily: HUD_FONT,
-        fontSize: '18px',
-        color: '#F9FAFB',
+      .text(this.scale.width / 2, this.scale.height * 0.38, '', {
+        fontFamily: RETRO_HUD_FONT,
+        fontSize: '14px',
+        color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 5,
+        align: 'center',
       })
-      .setOrigin(0.5, 0)
+      .setOrigin(0.5)
       .setDepth(35)
       .setScrollFactor(0)
 
-    this.updateHudText(
-      `TOP-DOWN ARENA // ${cfg.theme.toUpperCase()} // ${cfg.difficulty.toUpperCase()}`,
-    )
+    this.updateHud()
   }
 
-  private updateHudText(modeLabel?: string) {
+  private updateHud() {
     if (!this.hudText) return
-    if (modeLabel) this.hudBannerLine = modeLabel
-    const label = this.hudBannerLine ? `${this.hudBannerLine}\n` : ''
-    const hpNorm = Phaser.Math.Clamp(this.hp / 100, 0, 1)
-    const waveNorm = Phaser.Math.Clamp(this.kills / Math.max(1, this.targetKills), 0, 1)
-
-    if (this.hudChrome) {
-      this.hudChrome.clear()
-      this.hudChrome.fillStyle(0x070b17, 0.64)
-      this.hudChrome.fillRoundedRect(10, 10, 420, 92, 12)
-      this.hudChrome.lineStyle(1, 0x69e2ff, 0.45)
-      this.hudChrome.strokeRoundedRect(10, 10, 420, 92, 12)
-      this.hudChrome.fillStyle(0xffffff, 0.08)
-      this.hudChrome.fillRect(24, 58, 170, 8)
-      this.hudChrome.fillRect(24, 78, 170, 8)
-      this.hudChrome.fillStyle(0x3df28c, 0.92)
-      this.hudChrome.fillRect(24, 58, 170 * hpNorm, 8)
-      this.hudChrome.fillStyle(0x5ed7ff, 0.92)
-      this.hudChrome.fillRect(24, 78, 170 * waveNorm, 8)
-    }
-
+    const world = this.theme.toUpperCase().slice(0, 3)
     this.hudText.setText(
-      `${label}SCORE ${this.score}   HP ${this.hp}\nKILLS ${this.kills} / ${this.targetKills}   ENEMIES ${this.enemies.countActive(true)}\nWASD move · J / Space fire · Aim via movement`,
+      [
+        `★ ${this.score}   ♥×${this.lives}   ⚔ ${this.kills}/${this.targetKills}`,
+        `${world}-ARENA   👾 ${this.enemies.countActive(true)} active`,
+        'WASD Move · J/Space Fire · Aim = move dir',
+      ].join('\n'),
     )
   }
 
@@ -466,12 +370,15 @@ export default class TopDownArenaScene extends Phaser.Scene {
   private win() {
     this.gameOver = true
     this.physics.world.isPaused = true
-    this.showNotice('ARENA CLEARED // PRESS R TO RESTART')
+    playSfx('win')
+    this.cameras.main.flash(280, 255, 255, 160, false)
+    this.showNotice('⚔ ARENA CLEARED!\nPRESS R TO RESTART')
   }
 
   private fail() {
     this.gameOver = true
     this.physics.world.isPaused = true
-    this.showNotice('DEFEAT // PRESS R TO RETRY')
+    playSfx('lose')
+    this.showNotice('💀 DEFEATED!\nPRESS R TO RETRY')
   }
 }
